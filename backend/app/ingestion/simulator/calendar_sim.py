@@ -1,0 +1,39 @@
+import uuid
+import random
+from datetime import datetime, timezone
+
+from app.workers.celery_app import celery_app
+from app.schemas.events import FounderEvent, FounderEventMetadata, FounderEventPayload, TaskType, Source
+from app.ingestion.simulator.fixtures import FAKE_MEETINGS
+from app.ingestion.simulator.config import SIM_CONFIG
+
+
+@celery_app.task(name="poll_calendar_simulated")
+def poll_calendar_simulated(user_id: str | None = None):
+    """Emit a fake ASSISTANT_PREP event simulating an upcoming meeting."""
+    uid = user_id or str(uuid.uuid4())
+    meeting = random.choice(FAKE_MEETINGS)
+
+    event = FounderEvent(
+        metadata=FounderEventMetadata(
+            user_id=uuid.UUID(uid) if isinstance(uid, str) else uid,
+            trace_id=str(uuid.uuid4()),
+            timestamp=datetime.now(timezone.utc),
+        ),
+        task_type=TaskType.ASSISTANT_PREP,
+        payload=FounderEventPayload(
+            source=Source.CALENDAR,
+            content_raw=f"Meeting: {meeting['summary']}\nAttendees: {', '.join(meeting['attendees'])}",
+            content_redacted=f"Meeting: {meeting['summary']}\nAttendees: {', '.join(meeting['attendees'])}",
+            context_tags=["meeting-prep"],
+            entities=meeting["attendees"],
+            topic=meeting["summary"],
+        ),
+    )
+
+    celery_app.send_task(
+        "process_founder_event",
+        args=[event.model_dump(mode="json")],
+        priority=1,
+    )
+    return event.model_dump(mode="json")

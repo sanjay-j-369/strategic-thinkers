@@ -1,0 +1,73 @@
+import json
+import asyncio
+from contextlib import asynccontextmanager
+
+import redis.asyncio as aioredis
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+
+from app.config import settings
+from app.models.base import Base
+from app.api.ws import manager
+from app.api.routes import auth, summaries, guide, privacy
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # DB init
+    engine = create_async_engine(settings.DATABASE_URL, echo=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    app.state.async_session = async_sessionmaker(engine, expire_on_commit=False)
+
+    # Redis pub/sub listener
+    redis_client = aioredis.from_url(settings.REDIS_URL)
+    pubsub = redis_client.pubsub()
+    await pubsub.psubscribe("founder:*")
+
+    async def redis_listener():
+        async for message in pubsub.listen():
+            if message["type"] == "pmessage":
+                channel = message["channel"]
+                if isinstance(channel, bytes):
+                    channel = channel.decode()
+                # channel format: "founder:{user_id}"
+                user_id = channel.split(":", 1)[-1]
+                try:
+                    data = json.loads(message["data"])
+                    await manager.send_to_user(user_id, data)
+                except Exception:
+                    pass
+
+    listener_task = asyncio.create_task(redis_listener())
+
+    yield
+
+    listener_task.cancel()
+    await pubsub.close()
+    await redis_client.aclose()
+    await engine.dispose()
+
+
+app = FastAPI(title="Founder Intelligence Engine", lifespan=lifespan)
+
+app.include_router(auth.router)
+app.include_router(summaries.router)
+app.include_router(guide.router)
+app.include_router(privacy.router)
+
+
+@app.websocket("/ws/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: str):
+    await manager.connect(user_id, websocket)
+    try:
+        while True:
+            # Keep connection alive; messages are pushed from Redis listener
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(user_id)
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
