@@ -2,6 +2,7 @@ fastapi>=0.110.0
 uvicorn[standard]
 sqlalchemy[asyncio]>=2.0
 asyncpg
+psycopg2-binary
 alembic
 pydantic-settings
 pydantic[email]
@@ -9,7 +10,7 @@ celery[redis]>=5.3
 redis
 groq>=0.9.0
 sentence-transformers>=3.0
-pinecone-client
+pinecone>=3.0.0
 langgraph>=0.1.0
 presidio-analyzer
 presidio-anonymizer

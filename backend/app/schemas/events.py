@@ -1,4 +1,5 @@
-from pydantic import BaseModel, UUID4
+from pydantic import BaseModel
+from uuid import UUID
 from enum import Enum
 from typing import Optional
 from datetime import datetime
@@ -18,7 +19,7 @@ class Source(str, Enum):
 
 
 class FounderEventMetadata(BaseModel):
-    user_id: UUID4
+    user_id: UUID
     trace_id: str
     timestamp: datetime
 

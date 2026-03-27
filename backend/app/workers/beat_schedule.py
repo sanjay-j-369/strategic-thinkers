@@ -9,3 +9,13 @@ CELERYBEAT_SCHEDULE = {
         "schedule": crontab(minute="*/15"),
     },
 }
+
+if _mode == "real":
+    CELERYBEAT_SCHEDULE["poll-gmail"] = {
+        "task": "poll_gmail_real",
+        "schedule": crontab(minute="*/10"),  # every 10 min
+    }
+    CELERYBEAT_SCHEDULE["poll-slack"] = {
+        "task": "poll_slack_real",
+        "schedule": crontab(minute="*/5"),   # every 5 min
+    }

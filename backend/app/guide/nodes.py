@@ -83,7 +83,7 @@ Compare the founder's current metrics against external benchmarks.
 Produce a concise analysis paragraph."""
 
     response = _groq_client().chat.completions.create(
-        model="llama3-70b-8192",
+        model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,
     )
@@ -124,7 +124,7 @@ Output a structured Decision Framework (NOT a yes/no):
 3. A concrete 3-step action plan used by top-tier startups at this stage."""
 
     response = _groq_client().chat.completions.create(
-        model="llama3-70b-8192",
+        model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.4,
     )

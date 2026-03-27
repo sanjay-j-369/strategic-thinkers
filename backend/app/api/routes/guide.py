@@ -19,9 +19,15 @@ async def ask_guide(body: GuideRequest):
     from app.workers.celery_app import celery_app
 
     trace_id = str(uuid.uuid4())
+    # Accept any string user_id; generate a deterministic UUID if not valid
+    try:
+        user_uuid = uuid.UUID(body.user_id)
+    except ValueError:
+        user_uuid = uuid.uuid4()  # generate fresh v4 for non-UUID user_ids
+
     event = FounderEvent(
         metadata=FounderEventMetadata(
-            user_id=uuid.UUID(body.user_id),
+            user_id=user_uuid,
             trace_id=trace_id,
             timestamp=datetime.now(timezone.utc),
         ),

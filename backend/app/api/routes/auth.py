@@ -1,14 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from google_auth_oauthlib.flow import Flow
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import os
+from dotenv import load_dotenv
+from pathlib import Path
+
+load_dotenv(Path(__file__).resolve().parents[4] / ".env")
 
 from app.models.user import User
 from app.pipeline.encryption import encrypt
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+# In-memory store for OAuth flow state (keyed by state param)
+_flow_store: dict[str, Flow] = {}
 
 GOOGLE_SCOPES = [
     "openid",
@@ -17,35 +23,51 @@ GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/calendar.readonly",
 ]
 
+REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/auth/google/callback")
 
-def _get_flow() -> Flow:
+
+def _make_flow() -> Flow:
     return Flow.from_client_config(
         {
             "web": {
                 "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
                 "client_secret": os.getenv("GOOGLE_CLIENT_SECRET", ""),
-                "redirect_uris": [os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/auth/google/callback")],
+                "redirect_uris": [REDIRECT_URI],
                 "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                 "token_uri": "https://oauth2.googleapis.com/token",
             }
         },
         scopes=GOOGLE_SCOPES,
-        redirect_uri=os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/auth/google/callback"),
+        redirect_uri=REDIRECT_URI,
     )
 
 
 @router.get("/google")
 async def google_auth():
     """Redirect to Google OAuth consent screen."""
-    flow = _get_flow()
-    auth_url, _ = flow.authorization_url(prompt="consent", access_type="offline")
+    flow = _make_flow()
+    auth_url, state = flow.authorization_url(
+        prompt="consent",
+        access_type="offline",
+        include_granted_scopes="true",
+    )
+    # Store flow so callback can reuse it (preserves state/verifier)
+    _flow_store[state] = flow
     return RedirectResponse(url=auth_url)
 
 
 @router.get("/google/callback")
-async def google_callback(request: Request, code: str):
+async def google_callback(request: Request, code: str, state: str):
     """Handle Google OAuth callback, save encrypted token."""
-    flow = _get_flow()
+    # Reuse the same flow object from the auth step
+    flow = _flow_store.pop(state, None)
+    if flow is None:
+        # Fallback: create fresh flow (won't work with PKCE but worth trying)
+        flow = _make_flow()
+
+    # Allow insecure transport for local dev
+    os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+
     flow.fetch_token(code=code)
     credentials = flow.credentials
 
@@ -59,7 +81,6 @@ async def google_callback(request: Request, code: str):
     )
     email = id_info.get("email", "")
 
-    # Get DB session from app state
     async_session = request.app.state.async_session
     async with async_session() as session:
         result = await session.execute(select(User).where(User.email == email))

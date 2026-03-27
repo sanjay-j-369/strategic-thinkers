@@ -7,28 +7,25 @@ interface GuideCardData {
   generated_at: string;
 }
 
-interface GuideCardProps {
-  data: GuideCardData;
-}
-
-export function GuideCard({ data }: GuideCardProps) {
+export function GuideCard({ data }: { data: GuideCardData }) {
   const outputLines = data.output?.split("\n").filter(Boolean) || [];
 
   return (
-    <div className="border border-indigo-700/50 bg-indigo-950/20 rounded-xl overflow-hidden">
-      <div className="px-4 py-3 bg-indigo-900/30 flex items-center gap-2">
-        <span className="text-indigo-400 text-sm">🟣</span>
-        <span className="text-indigo-300 font-semibold text-sm uppercase tracking-wide">
-          Strategic Insight
+    <div className="glass rounded-2xl overflow-hidden glow-indigo animate-fade-in">
+      <div className="px-5 py-3 bg-indigo-500/10 border-b border-indigo-500/20 flex items-center gap-2">
+        <span className="w-2 h-2 rounded-full bg-indigo-400" />
+        <span className="text-indigo-300 font-semibold text-xs uppercase tracking-widest">Strategic Insight</span>
+        <span className="ml-auto text-gray-500 text-xs">
+          {new Date(data.generated_at).toLocaleTimeString()}
         </span>
       </div>
 
-      <div className="px-4 py-4">
-        <h3 className="text-white font-semibold text-base mb-3">{data.question}</h3>
+      <div className="px-5 py-5">
+        <h3 className="text-white font-semibold text-base mb-4">{data.question}</h3>
 
         {data.analysis && (
-          <div className="mb-4">
-            <p className="text-gray-400 text-xs uppercase tracking-wide mb-1">Situation</p>
+          <div className="mb-4 p-3 rounded-lg bg-white/5">
+            <p className="text-gray-400 text-xs uppercase tracking-wide mb-1.5">Situation Analysis</p>
             <p className="text-gray-300 text-sm leading-relaxed">{data.analysis}</p>
           </div>
         )}
@@ -36,10 +33,10 @@ export function GuideCard({ data }: GuideCardProps) {
         {data.red_flags && data.red_flags.length > 0 && (
           <div className="mb-4">
             <p className="text-gray-400 text-xs uppercase tracking-wide mb-2">Red Flags</p>
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               {data.red_flags.map((flag, i) => (
-                <div key={i} className="flex items-start gap-2">
-                  <span className="text-red-400 mt-0.5">🚩</span>
+                <div key={i} className="flex items-start gap-2 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20">
+                  <span className="text-red-400 shrink-0">🚩</span>
                   <p className="text-red-300 text-sm">{flag}</p>
                 </div>
               ))}
@@ -47,22 +44,16 @@ export function GuideCard({ data }: GuideCardProps) {
           </div>
         )}
 
-        {data.output && (
+        {outputLines.length > 0 && (
           <div>
             <p className="text-gray-400 text-xs uppercase tracking-wide mb-2">Decision Framework</p>
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               {outputLines.map((line, i) => (
-                <p key={i} className="text-gray-300 text-sm leading-relaxed">
-                  {line}
-                </p>
+                <p key={i} className="text-gray-300 text-sm leading-relaxed">{line}</p>
               ))}
             </div>
           </div>
         )}
-
-        <p className="text-gray-600 text-xs mt-4">
-          {new Date(data.generated_at).toLocaleTimeString()}
-        </p>
       </div>
     </div>
   );

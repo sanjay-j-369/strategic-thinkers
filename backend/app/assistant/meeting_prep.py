@@ -67,7 +67,7 @@ MEETING TOPIC: {topic}
 PARTICIPANTS: {', '.join(entities) if entities else 'Unknown'}"""
 
     response = _groq_client().chat.completions.create(
-        model="llama3-70b-8192",
+        model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,
     )

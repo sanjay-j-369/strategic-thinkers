@@ -1,4 +1,11 @@
 import os
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+from dotenv import load_dotenv
+from pathlib import Path
+load_dotenv(Path(__file__).resolve().parents[3] / ".env")  # project root .env
+
 from celery import Celery
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -7,8 +14,15 @@ celery_app = Celery(
     "founders_helper",
     broker=REDIS_URL,
     backend=REDIS_URL,
-    include=["app.workers.consumer", "app.ingestion.calendar", "app.ingestion.simulator.calendar_sim"],
+    include=[
+        "app.workers.consumer",
+        "app.workers.real_ingestion",
+        "app.ingestion.calendar",
+        "app.ingestion.simulator.calendar_sim",
+    ],
 )
+
+from app.workers.beat_schedule import CELERYBEAT_SCHEDULE
 
 celery_app.conf.update(
     task_serializer="json",
@@ -19,4 +33,6 @@ celery_app.conf.update(
     task_queue_max_priority=10,
     task_default_priority=5,
     broker_transport_options={"priority_steps": list(range(10))},
+    worker_pool="solo",
+    beat_schedule=CELERYBEAT_SCHEDULE,
 )

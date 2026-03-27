@@ -36,7 +36,7 @@ class GmailWorker:
         messages = (
             self.service.users()
             .messages()
-            .list(userId="me", maxResults=max_results, q="is:unread")
+            .list(userId="me", maxResults=max_results, q="newer_than:1d")
             .execute()
             .get("messages", [])
         )
@@ -55,8 +55,11 @@ class GmailWorker:
             sender = headers.get("From", "")
             snippet = msg.get("snippet", "")
 
-            content = f"Subject: {subject}\nFrom: {sender}\n\n{snippet}"
+            # Also try to get full body for meet link detection
+            body = _extract_body(msg)
+            content = f"Subject: {subject}\nFrom: {sender}\n\n{body or snippet}"
             tags = extract_tags(content)
+            print(f"[Gmail] Found email: {subject} from {sender}")
 
             event = FounderEvent(
                 metadata=FounderEventMetadata(
@@ -83,3 +86,22 @@ class GmailWorker:
             events.append(event)
 
         return events
+
+
+def _extract_body(msg: dict) -> str:
+    """Extract plain text body from Gmail message payload."""
+    import base64
+    payload = msg.get("payload", {})
+
+    def get_text(part):
+        if part.get("mimeType") == "text/plain":
+            data = part.get("body", {}).get("data", "")
+            if data:
+                return base64.urlsafe_b64decode(data + "==").decode("utf-8", errors="ignore")
+        for p in part.get("parts", []):
+            result = get_text(p)
+            if result:
+                return result
+        return ""
+
+    return get_text(payload)

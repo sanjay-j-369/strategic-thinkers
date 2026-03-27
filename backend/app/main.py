@@ -4,12 +4,13 @@ from contextlib import asynccontextmanager
 
 import redis.asyncio as aioredis
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
 from app.config import settings
 from app.models.base import Base
 from app.api.ws import manager
-from app.api.routes import auth, summaries, guide, privacy
+from app.api.routes import auth, summaries, guide, privacy, simulate, ingest, meetings, chat
 
 
 @asynccontextmanager
@@ -51,10 +52,22 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Founder Intelligence Engine", lifespan=lifespan)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(auth.router)
 app.include_router(summaries.router)
 app.include_router(guide.router)
 app.include_router(privacy.router)
+app.include_router(simulate.router)
+app.include_router(ingest.router)
+app.include_router(meetings.router)
+app.include_router(chat.router)
 
 
 @app.websocket("/ws/{user_id}")

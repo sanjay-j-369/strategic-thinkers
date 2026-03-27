@@ -9,6 +9,12 @@ from app.schemas.events import FounderEvent, TaskType
 
 @celery_app.task(name="process_founder_event", bind=True)
 def process_founder_event(self, event_data: dict):
+    """
+    Main worker: routes on task_type.
+    - DATA_INGESTION: strip_pii -> encrypt -> embed -> upsert pinecone -> save archive
+    - ASSISTANT_PREP: generate_prep_card -> save summary -> publish to redis pubsub
+    - GUIDE_QUERY: run guide graph -> publish to redis pubsub
+    """
     event = FounderEvent(**event_data)
     user_id = str(event.metadata.user_id)
     task_type = event.task_type
@@ -28,6 +34,7 @@ def _handle_data_ingestion(event: FounderEvent, user_id: str):
     from app.pipeline.encryption import encrypt
     from app.pipeline.embedder import upsert_to_pinecone
     from app.pipeline.tagger import extract_tags
+    from app.pipeline.meeting_detector import detect_meeting
 
     content_raw = event.payload.content_raw
     content_redacted = strip_pii(content_raw)
@@ -49,6 +56,13 @@ def _handle_data_ingestion(event: FounderEvent, user_id: str):
         },
     )
     _save_archive(user_id, event.payload.source.value, content_enc, tags)
+
+    # LLM-powered meeting detection
+    meeting = detect_meeting(content_raw, event.payload.source.value)
+    if meeting:
+        _save_meeting_from_detection(user_id, meeting)
+        print(f"[Consumer] Meeting detected: {meeting.get('topic')}")
+
 
 
 def _handle_assistant_prep(event: FounderEvent, user_id: str):
@@ -89,13 +103,53 @@ def _handle_guide_query(event: FounderEvent, user_id: str):
     _publish_to_redis(user_id, card)
 
 
+def _save_meeting_from_detection(user_id: str, meeting: dict):
+    """Save LLM-detected meeting to DB."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from app.models.base import Base
+    from app.models.user import User
+    from app.models.summary import Summary
+    from datetime import datetime, timezone
+
+    db_url = os.environ.get("DATABASE_URL", "").replace("+asyncpg", "")
+    try:
+        engine = create_engine(db_url)
+        Base.metadata.create_all(engine)
+        attendees = ", ".join(meeting.get("attendees") or [])
+        meet_link = meeting.get("meet_link") or ""
+        scheduled = meeting.get("scheduled_time") or datetime.now(timezone.utc).isoformat()
+        summary_parts = [
+            f"Attendees: {attendees}",
+            f"Scheduled: {scheduled}",
+            f"Summary: {meeting.get('summary', '')}",
+        ]
+        if meet_link:
+            summary_parts.append(f"Meet Link: {meet_link}")
+
+        with Session(engine) as session:
+            session.add(Summary(
+                user_id=uuid.UUID(user_id),
+                type="MEETING",
+                topic=meeting.get("topic", "Meeting"),
+                summary_text="\n".join(summary_parts),
+            ))
+            session.commit()
+    except Exception as e:
+        print(f"Meeting detection save error: {e}")
+
+
 def _save_archive(user_id: str, source: str, content_enc: str, tags: list):
     from sqlalchemy import create_engine
     from sqlalchemy.orm import Session
+    from app.models.base import Base
+    from app.models.user import User  # must import User first so FK resolves
     from app.models.archive import Archive
 
+    db_url = os.environ.get("DATABASE_URL", "").replace("+asyncpg", "")
     try:
-        engine = create_engine(os.environ.get("DATABASE_URL", "").replace("+asyncpg", ""))
+        engine = create_engine(db_url)
+        Base.metadata.create_all(engine)
         with Session(engine) as session:
             session.add(Archive(
                 user_id=uuid.UUID(user_id),
@@ -108,13 +162,16 @@ def _save_archive(user_id: str, source: str, content_enc: str, tags: list):
         print(f"Archive save error: {e}")
 
 
-def _save_summary(user_id: str, summary_type: str, topic, summary_text: str):
+def _save_summary(user_id: str, summary_type: str, topic: str | None, summary_text: str):
     from sqlalchemy import create_engine
     from sqlalchemy.orm import Session
     from app.models.summary import Summary
+    from app.models.base import Base
 
+    db_url = os.environ.get("DATABASE_URL", "").replace("+asyncpg", "")
     try:
-        engine = create_engine(os.environ.get("DATABASE_URL", "").replace("+asyncpg", ""))
+        engine = create_engine(db_url)
+        Base.metadata.create_all(engine)
         with Session(engine) as session:
             session.add(Summary(
                 user_id=uuid.UUID(user_id),
