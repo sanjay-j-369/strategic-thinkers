@@ -26,11 +26,12 @@ def chat(body: ChatRequest):
 You have direct access to the founder's recent emails and Slack messages shown below.
 Answer questions specifically based on this data. Quote relevant parts when useful.
 If asked about a specific email or message, find it in the context and summarize it.
+ALWAYS preserve privacy tokens EXACTLY as they appear in the text (e.g. <PHONE_NUMBER_8a2b>). Do not modify or truncate them.
 
 FOUNDER'S EMAILS & SLACK MESSAGES:
 {context}
 
-Be direct and specific. Reference actual content from the messages above."""
+Be direct and specific. Reference actual content and tokens from the messages above."""
 
     messages = [{"role": "system", "content": system_prompt}]
     messages += body.history[-10:]
@@ -43,7 +44,42 @@ Be direct and specific. Reference actual content from the messages above."""
         max_tokens=1024,
     )
 
-    return {"reply": response.choices[0].message.content}
+    reply = response.choices[0].message.content
+    pii_mapping = {}
+
+    try:
+        import re
+        import uuid
+        from sqlalchemy import create_engine, select
+        from sqlalchemy.orm import Session
+        from app.models.pii_vault import PiiVault
+        from app.pipeline.encryption import decrypt
+
+        # Find tokens like <PHONE_NUMBER_8a2b>
+        tokens = set(re.findall(r"<[A-Z0-9_]+_[a-f0-9]+>", reply))
+        if tokens:
+            db_url = os.environ.get("DATABASE_URL", "").replace("+asyncpg", "")
+            engine = create_engine(db_url)
+            with Session(engine) as session:
+                for token in tokens:
+                    item = session.execute(
+                        select(PiiVault).where(PiiVault.token == token, PiiVault.user_id == uuid.UUID(body.user_id))
+                    ).scalar_one_or_none()
+                    if item:
+                        try:
+                            plaintext = decrypt(body.user_id, item.encrypted_value)
+                            from cryptography.fernet import Fernet
+                            # random key for symmetric encryption to frontend
+                            mock_key = b'7C9_xH7n-2TfA8XmK_j_yWkXN2q48R_bZ0J8m4lR5G8='
+                            f = Fernet(mock_key)
+                            encrypted_pii = f.encrypt(plaintext.encode('utf-8')).decode('utf-8')
+                            pii_mapping[token] = encrypted_pii
+                        except Exception:
+                            pass
+    except Exception as e:
+        print(f"PII decode error: {e}")
+
+    return {"reply": reply, "pii_mapping": pii_mapping}
 
 
 def _get_context(user_id: str, question: str) -> str:

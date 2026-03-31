@@ -37,7 +37,7 @@ def _handle_data_ingestion(event: FounderEvent, user_id: str):
     from app.pipeline.meeting_detector import detect_meeting
 
     content_raw = event.payload.content_raw
-    content_redacted = strip_pii(content_raw)
+    content_redacted, pii_mapping = strip_pii(content_raw, user_id)
     content_enc = encrypt(user_id, content_raw)
     tags = event.payload.context_tags or extract_tags(content_redacted)
 
@@ -56,6 +56,9 @@ def _handle_data_ingestion(event: FounderEvent, user_id: str):
         },
     )
     _save_archive(user_id, event.payload.source.value, content_enc, tags)
+    
+    if pii_mapping:
+        _save_pii_mapping(user_id, pii_mapping)
 
     # LLM-powered meeting detection
     meeting = detect_meeting(content_raw, event.payload.source.value)
@@ -191,3 +194,27 @@ def _publish_to_redis(user_id: str, card: dict):
         r.publish(f"founder:{user_id}", json.dumps(card))
     except Exception as e:
         print(f"Redis publish error: {e}")
+
+
+def _save_pii_mapping(user_id: str, mapping: dict):
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from app.models.base import Base
+    from app.models.pii_vault import PiiVault
+    import uuid
+    import os
+
+    db_url = os.environ.get("DATABASE_URL", "").replace("+asyncpg", "")
+    try:
+        engine = create_engine(db_url)
+        Base.metadata.create_all(engine)
+        with Session(engine) as session:
+            for token, enc_val in mapping.items():
+                session.add(PiiVault(
+                    user_id=uuid.UUID(user_id),
+                    token=token,
+                    encrypted_value=enc_val
+                ))
+            session.commit()
+    except Exception as e:
+        print(f"PiiVault save error: {e}")

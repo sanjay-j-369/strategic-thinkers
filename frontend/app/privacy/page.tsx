@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { PrivacyTable } from "@/components/PrivacyTable";
 
-const API_URL = "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 const DEMO_USER_ID = "d4c615b8-cedc-4c97-80ed-2c8373610d78";
 
 export default function PrivacyPage() {

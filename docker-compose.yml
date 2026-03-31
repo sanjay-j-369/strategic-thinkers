@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: founders_helper
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -32,7 +32,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "8001:8000"
     env_file:
       - .env
     environment:
@@ -88,12 +88,14 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "3001:3000"
     env_file:
       - .env
     environment:
-      NEXT_PUBLIC_WS_URL: ws://localhost:8000
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_WS_URL: ws://localhost:8001
+      NEXT_PUBLIC_API_URL: http://localhost:8001
+      NEXT_PUBLIC_INGESTION_MODE: ${INGESTION_MODE:-simulate}
+      NEXT_PUBLIC_ALLOW_MANUAL_INGESTION: ${ALLOW_MANUAL_INGESTION:-false}
     depends_on:
       - backend
 

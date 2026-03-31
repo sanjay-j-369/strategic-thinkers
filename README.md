@@ -19,7 +19,7 @@ cp .env.example .env
 docker compose up
 
 # 3. Visit the dashboard
-open http://localhost:3000
+open http://localhost:3001
 ```
 
 ## Architecture
@@ -44,9 +44,9 @@ open http://localhost:3000
 
 | Service | Port | Description |
 |---------|------|-------------|
-| Frontend (Next.js) | 3000 | Real-time intelligence feed |
-| Backend (FastAPI) | 8000 | REST API + WebSocket |
-| PostgreSQL | 5432 | Archive + summaries |
+| Frontend (Next.js) | 3001 | Real-time intelligence feed |
+| Backend (FastAPI) | 8001 | REST API + WebSocket |
+| PostgreSQL | 5433 | Archive + summaries |
 | Redis | 6379 | Queue + pub/sub |
 
 ## Modes

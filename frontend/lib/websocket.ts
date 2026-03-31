@@ -7,7 +7,7 @@ export function useFounderFeed(userId: string) {
   useEffect(() => {
     if (!userId) return;
 
-    ws.current = new WebSocket(`ws://localhost:8000/ws/${userId}`);
+    ws.current = new WebSocket(`ws://localhost:8001/ws/${userId}`);
 
     ws.current.onmessage = (e) => {
       const card = JSON.parse(e.data);

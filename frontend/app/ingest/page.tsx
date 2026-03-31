@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 
-const API_URL = "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 const DEMO_USER_ID = "d4c615b8-cedc-4c97-80ed-2c8373610d78";
 
 type Tab = "email" | "slack";
@@ -20,6 +20,8 @@ export default function IngestPage() {
   // Slack form
   const [slackChannel, setSlackChannel] = useState("");
   const [slackMessage, setSlackMessage] = useState("");
+
+  const allowManual = process.env.NEXT_PUBLIC_ALLOW_MANUAL_INGESTION === "true" || process.env.NEXT_PUBLIC_INGESTION_MODE === "simulate";
 
   async function submitEmail(e: React.FormEvent) {
     e.preventDefault();
@@ -67,7 +69,54 @@ export default function IngestPage() {
       setLoading(false);
     }
   }
+  if (!allowManual) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <div className="mb-8">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs text-indigo-300 mb-4">
+            <span>🔗</span> Data Integrations
+          </div>
+          <h1 className="text-3xl font-bold text-white mb-2">Connect Your Data Sources</h1>
+          <p className="text-gray-400">Connect Google Calendar, Gmail, and Slack to stream meeting context automatically in the background.</p>
+        </div>
+        
+        <div className="space-y-4">
+          <button 
+            onClick={() => setSuccess("Google Mail & Calendar integration coming soon!")}
+            className="flex items-center justify-between w-full p-4 glass rounded-xl hover:bg-white/5 transition-colors group">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center text-xl">📧</div>
+              <div className="text-left">
+                <h3 className="text-white font-medium">Google Mail & Calendar</h3>
+                <p className="text-gray-400 text-sm">Automatically ingest emails and sync meetings</p>
+              </div>
+            </div>
+            <span className="px-4 py-2 bg-white/10 rounded-lg text-sm text-white group-hover:bg-white/20 transition-colors">Connect Google</span>
+          </button>
+          
+          <button 
+            onClick={() => setSuccess("Slack integration coming soon!")}
+            className="flex items-center justify-between w-full p-4 glass rounded-xl hover:bg-white/5 transition-colors group">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center text-xl">💬</div>
+              <div className="text-left">
+                <h3 className="text-white font-medium">Slack</h3>
+                <p className="text-gray-400 text-sm">Listen for updates in specific #channels</p>
+              </div>
+            </div>
+            <span className="px-4 py-2 bg-white/10 rounded-lg text-sm text-white group-hover:bg-white/20 transition-colors">Connect Slack</span>
+          </button>
+        </div>
 
+        {/* Feedback */}
+        {success && (
+          <div className="mt-4 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm animate-fade-in">
+            {success}
+          </div>
+        )}
+      </div>
+    );
+  }
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-8">

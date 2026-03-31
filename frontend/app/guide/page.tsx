@@ -1,8 +1,11 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import fernet from "fernet";
 
-const API_URL = "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 const DEMO_USER_ID = "d4c615b8-cedc-4c97-80ed-2c8373610d78";
+const MOCK_KEY = "7C9_xH7n-2TfA8XmK_j_yWkXN2q48R_bZ0J8m4lR5G8="; // same random string used in backend
+
 
 const STARTERS = [
   "Should I hire a CTO now or keep outsourcing?",
@@ -52,7 +55,27 @@ export default function ChatPage() {
         }),
       });
       const data = await res.json();
-      setMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
+      
+      let finalReply = data.reply;
+      if (data.pii_mapping && Object.keys(data.pii_mapping).length > 0) {
+        // init fernet secret
+        const secret = new fernet.Secret(MOCK_KEY);
+        Object.entries(data.pii_mapping).forEach(([token, encryptedValue]) => {
+          try {
+            const tokenInstance = new fernet.Token({
+              secret: secret,
+              token: String(encryptedValue),
+              ttl: 0 // no ttl check
+            });
+            const plaintext = tokenInstance.decode();
+            finalReply = finalReply.replaceAll(token, plaintext);
+          } catch (err) {
+            console.error("Failed to decrypt token:", token, err);
+          }
+        });
+      }
+
+      setMessages(prev => [...prev, { role: "assistant", content: finalReply }]);
     } catch {
       setMessages(prev => [...prev, { role: "assistant", content: "Something went wrong. Try again." }]);
     } finally {
