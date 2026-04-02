@@ -1,11 +1,24 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+
+import { useEffect, useRef, useState } from "react";
 import fernet from "fernet";
+import { AnimatePresence, motion } from "framer-motion";
+import { Bot, LoaderCircle, Send, Sparkles, UserCircle2 } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 const DEMO_USER_ID = "d4c615b8-cedc-4c97-80ed-2c8373610d78";
-const MOCK_KEY = "7C9_xH7n-2TfA8XmK_j_yWkXN2q48R_bZ0J8m4lR5G8="; // same random string used in backend
-
+const MOCK_KEY = "7C9_xH7n-2TfA8XmK_j_yWkXN2q48R_bZ0J8m4lR5G8=";
 
 const STARTERS = [
   "Should I hire a CTO now or keep outsourcing?",
@@ -23,7 +36,8 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      content: "Hey, I'm your strategic AI advisor. I have context from your emails, Slack, and meetings. Ask me anything about your startup.",
+      content:
+        "I have context from your emails, Slack, and meetings. Ask for a decision memo, a risk readout, or a tactical next move.",
     },
   ]);
   const [input, setInput] = useState("");
@@ -35,12 +49,12 @@ export default function ChatPage() {
   }, [messages]);
 
   async function send(text?: string) {
-    const msg = text || input.trim();
-    if (!msg || loading) return;
+    const message = text || input.trim();
+    if (!message || loading) return;
 
-    const userMsg: Message = { role: "user", content: msg };
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
+    const userMessage: Message = { role: "user", content: message };
+    const nextMessages = [...messages, userMessage];
+    setMessages(nextMessages);
     setInput("");
     setLoading(true);
 
@@ -50,22 +64,23 @@ export default function ChatPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_id: DEMO_USER_ID,
-          message: msg,
-          history: newMessages.slice(-10).map(m => ({ role: m.role, content: m.content })),
+          message,
+          history: nextMessages
+            .slice(-10)
+            .map((entry) => ({ role: entry.role, content: entry.content })),
         }),
       });
       const data = await res.json();
-      
+
       let finalReply = data.reply;
       if (data.pii_mapping && Object.keys(data.pii_mapping).length > 0) {
-        // init fernet secret
         const secret = new fernet.Secret(MOCK_KEY);
         Object.entries(data.pii_mapping).forEach(([token, encryptedValue]) => {
           try {
             const tokenInstance = new fernet.Token({
-              secret: secret,
+              secret,
               token: String(encryptedValue),
-              ttl: 0 // no ttl check
+              ttl: 0,
             });
             const plaintext = tokenInstance.decode();
             finalReply = finalReply.replaceAll(token, plaintext);
@@ -75,93 +90,169 @@ export default function ChatPage() {
         });
       }
 
-      setMessages(prev => [...prev, { role: "assistant", content: finalReply }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: finalReply }]);
     } catch {
-      setMessages(prev => [...prev, { role: "assistant", content: "Something went wrong. Try again." }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "Something went wrong. Try again.",
+        },
+      ]);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="max-w-3xl mx-auto flex flex-col h-[calc(100vh-80px)]">
-      {/* Header */}
-      <div className="mb-4">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs text-purple-300 mb-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          Strategic AI Advisor
-        </div>
-        <h1 className="text-2xl font-bold text-white">Ask the Guide</h1>
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto space-y-4 pr-1 pb-4">
-        {messages.map((m, i) => (
-          <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-              m.role === "user"
-                ? "bg-indigo-600 text-white rounded-br-sm"
-                : "glass text-gray-200 rounded-bl-sm"
-            }`}>
-              {m.role === "assistant" && (
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <div className="w-4 h-4 rounded bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-[8px] font-bold">F</div>
-                  <span className="text-xs text-gray-400 font-medium">Guide</span>
-                </div>
-              )}
-              <p className="whitespace-pre-wrap">{m.content}</p>
+    <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}>
+        <Card className="h-full">
+          <CardHeader>
+            <Badge className="w-fit">Strategic AI Advisor</Badge>
+            <CardTitle className="text-3xl">Ask for the next best move.</CardTitle>
+            <CardDescription>
+              The guide reads your operational context and answers in memo form, not generic chat filler.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-3">
+              <p className="mono-label">Starter Prompts</p>
+              {STARTERS.map((starter) => (
+                <Button
+                  key={starter}
+                  variant="secondary"
+                  className="h-auto w-full justify-start whitespace-normal rounded-[22px] px-4 py-4 text-left leading-6"
+                  onClick={() => send(starter)}
+                  disabled={loading}
+                >
+                  <Sparkles className="mt-1 h-4 w-4 shrink-0" />
+                  <span>{starter}</span>
+                </Button>
+              ))}
             </div>
-          </div>
-        ))}
 
-        {loading && (
-          <div className="flex justify-start">
-            <div className="glass rounded-2xl rounded-bl-sm px-4 py-3">
-              <div className="flex gap-1">
-                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: "0ms" }} />
-                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: "150ms" }} />
-                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+            <div className="rounded-[24px] border border-white/10 bg-black/30 p-4">
+              <p className="mono-label mb-2">What It Knows</p>
+              <p className="text-sm leading-7 text-zinc-400">
+                Recent archive entries, scheduled meetings, and context retrieved from memory before each answer.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}>
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b border-white/10 pb-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="space-y-2">
+                <Badge variant="secondary" className="w-fit">
+                  Live Conversation
+                </Badge>
+                <CardTitle className="text-3xl">Guide workspace</CardTitle>
+                <CardDescription>
+                  Ask sharp questions. The assistant answers using your founder context, not canned frameworks.
+                </CardDescription>
+              </div>
+              <div className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-[11px] font-mono uppercase tracking-[0.24em] text-zinc-500">
+                {loading ? "Thinking" : "Ready"}
               </div>
             </div>
-          </div>
-        )}
-        <div ref={bottomRef} />
-      </div>
+          </CardHeader>
 
-      {/* Starter chips — only show at start */}
-      {messages.length === 1 && (
-        <div className="flex flex-wrap gap-2 mb-3">
-          {STARTERS.map(s => (
-            <button
-              key={s}
-              onClick={() => send(s)}
-              className="text-xs px-3 py-1.5 rounded-full glass glass-hover text-gray-300 hover:text-white transition-all"
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
+          <CardContent className="flex h-[calc(100vh-14rem)] flex-col pt-6">
+            <div className="flex-1 space-y-4 overflow-y-auto pr-2">
+              <AnimatePresence initial={false}>
+                {messages.map((message, index) => {
+                  const isUser = message.role === "user";
 
-      {/* Input */}
-      <div className="glass rounded-2xl p-2 flex gap-2">
-        <input
-          type="text"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && send()}
-          placeholder="Ask a strategic question..."
-          disabled={loading}
-          className="flex-1 bg-transparent px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none text-sm"
-        />
-        <button
-          onClick={() => send()}
-          disabled={loading || !input.trim()}
-          className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-40 text-white px-5 py-2.5 rounded-xl font-medium text-sm transition-all"
-        >
-          {loading ? "..." : "Send"}
-        </button>
-      </div>
+                  return (
+                    <motion.div
+                      key={`${message.role}-${index}-${message.content.slice(0, 20)}`}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className={`flex ${isUser ? "justify-end" : "justify-start"}`}
+                    >
+                      <div
+                        className={`chat-bubble max-w-[86%] ${
+                          isUser ? "chat-bubble-user" : "chat-bubble-assistant"
+                        }`}
+                      >
+                        <div className="mb-3 flex items-center gap-2 text-xs uppercase tracking-[0.24em]">
+                          {isUser ? (
+                            <>
+                              <UserCircle2 className="h-4 w-4" />
+                              <span>User</span>
+                            </>
+                          ) : (
+                            <>
+                              <Bot className="h-4 w-4" />
+                              <span>Guide</span>
+                            </>
+                          )}
+                        </div>
+                        <p className="whitespace-pre-wrap">{message.content}</p>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+
+                {loading ? (
+                  <motion.div
+                    key="loading"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex justify-start"
+                  >
+                    <div className="chat-bubble chat-bubble-assistant flex items-center gap-3">
+                      <LoaderCircle className="h-4 w-4 animate-spin text-zinc-300" />
+                      <span className="text-sm text-zinc-400">
+                        Synthesizing a response from the latest context.
+                      </span>
+                    </div>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+              <div ref={bottomRef} />
+            </div>
+
+            <div className="mt-6 rounded-[28px] border border-white/10 bg-black/40 p-2">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                <Input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && send()}
+                  placeholder="Ask a strategic question..."
+                  disabled={loading}
+                  className="h-12 flex-1 border-0 bg-transparent px-4 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                />
+                <div className="flex items-center justify-between gap-3 md:justify-end">
+                  <Badge variant="secondary" className="hidden md:inline-flex">
+                    Founder context attached
+                  </Badge>
+                  <Button
+                    onClick={() => send()}
+                    disabled={loading || !input.trim()}
+                    size="lg"
+                    className="w-full md:w-auto"
+                  >
+                    {loading ? (
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                    Send
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
     </div>
   );
 }

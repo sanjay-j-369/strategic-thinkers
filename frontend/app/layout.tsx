@@ -1,55 +1,34 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import "./globals.css";
-import Link from "next/link";
 
-const inter = Inter({ subsets: ["latin"] });
+import { SiteHeader } from "@/components/layout/site-header";
+
+import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Founder Intelligence Engine",
-  description: "Your personal AI intelligence layer for Gmail, Slack, and Calendar",
+  title: "Founder OS",
+  description:
+    "A monochrome founder command center for live context, strategic guidance, and privacy controls.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="en" className="dark">
-      <body
-        className={`${inter.className} min-h-screen text-gray-100`}
-        style={{ background: "linear-gradient(135deg, #0f0c29 0%, #1a1a2e 40%, #16213e 100%)" }}
-      >
-        {/* Nav */}
-        <nav className="sticky top-0 z-50 border-b border-white/10 backdrop-blur-xl bg-black/20 px-6 py-4">
-          <div className="max-w-6xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-sm font-bold">
-                F
-              </div>
-              <span className="font-semibold text-lg tracking-tight text-gradient">
-                Founder Intelligence
-              </span>
-            </div>
-            <div className="flex gap-1 text-sm">
-              {[
-                { href: "/", label: "Feed", icon: "⚡" },
-                { href: "/guide", label: "Guide", icon: "🧭" },
-                { href: "/ingest", label: "Ingest", icon: "📥" },
-                { href: "/meetings", label: "Meetings", icon: "📅" },
-                { href: "/privacy", label: "Privacy", icon: "🔒" },
-              ].map(({ href, label, icon }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all duration-150"
-                >
-                  <span>{icon}</span>
-                  <span>{label}</span>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </nav>
+    <html lang="en">
+      <body className="min-h-screen bg-background font-sans text-foreground antialiased">
+        <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),transparent_28%)]" />
+          <div className="absolute inset-x-0 top-0 h-[520px] bg-[linear-gradient(180deg,rgba(255,255,255,0.08),transparent)] opacity-40" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(255,255,255,0.06),transparent_26%),radial-gradient(circle_at_80%_0%,rgba(255,255,255,0.05),transparent_24%),linear-gradient(180deg,#0a0a0a_0%,#050505_55%,#020202_100%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:72px_72px] opacity-[0.08]" />
+        </div>
 
-        <main className="max-w-6xl mx-auto px-6 py-8">{children}</main>
+        <div className="px-4 pb-10 pt-4 sm:px-6 lg:px-8">
+          <SiteHeader />
+          <main className="mx-auto max-w-7xl">{children}</main>
+        </div>
       </body>
     </html>
   );

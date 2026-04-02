@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 
+const WS_BASE_URL =
+  process.env.NEXT_PUBLIC_WS_URL ||
+  (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001").replace(
+    /^http/,
+    "ws"
+  );
+
 export function useFounderFeed(userId: string) {
   const [cards, setCards] = useState<any[]>([]);
   const ws = useRef<WebSocket | null>(null);
@@ -7,27 +14,34 @@ export function useFounderFeed(userId: string) {
   useEffect(() => {
     if (!userId) return;
 
-    ws.current = new WebSocket(`ws://localhost:8001/ws/${userId}`);
+    let active = true;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-    ws.current.onmessage = (e) => {
-      const card = JSON.parse(e.data);
-      setCards((prev) => [card, ...prev]); // Newest at top
+    const connect = () => {
+      if (!active) return;
+
+      ws.current = new WebSocket(`${WS_BASE_URL}/ws/${userId}`);
+
+      ws.current.onmessage = (event) => {
+        const card = JSON.parse(event.data);
+        setCards((prev) => [card, ...prev]);
+      };
+
+      ws.current.onerror = () => console.warn("WS error, retrying...");
+
+      ws.current.onclose = () => {
+        if (!active) return;
+        reconnectTimer = setTimeout(connect, 3000);
+      };
     };
 
-    ws.current.onerror = () => console.warn("WS error — retrying...");
+    connect();
 
-    ws.current.onclose = () => {
-      // Attempt reconnect after 3 seconds
-      setTimeout(() => {
-        if (ws.current?.readyState === WebSocket.CLOSED) {
-          ws.current = new WebSocket(
-            `${process.env.NEXT_PUBLIC_WS_URL}/ws/${userId}`
-          );
-        }
-      }, 3000);
+    return () => {
+      active = false;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      ws.current?.close();
     };
-
-    return () => ws.current?.close();
   }, [userId]);
 
   return cards;

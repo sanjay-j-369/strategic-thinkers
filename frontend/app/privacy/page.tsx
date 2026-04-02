@@ -1,99 +1,262 @@
 "use client";
-import { useState, useEffect } from "react";
+
+import { useCallback, useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { Database, Eye, LockKeyhole, Shield } from "lucide-react";
+
 import { PrivacyTable } from "@/components/PrivacyTable";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 const DEMO_USER_ID = "d4c615b8-cedc-4c97-80ed-2c8373610d78";
 
+interface ArchiveItem {
+  id: string;
+  source: string;
+  context_tags: string[];
+  ingested_at: string;
+}
+
 export default function PrivacyPage() {
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<ArchiveItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [viewContent, setViewContent] = useState("");
+  const [viewItem, setViewItem] = useState<ArchiveItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ArchiveItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const PAGE_SIZE = 20;
 
-  async function fetchItems() {
+  const fetchItems = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/archive?user_id=${DEMO_USER_ID}&limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`);
+      const res = await fetch(
+        `${API_URL}/api/archive?user_id=${DEMO_USER_ID}&limit=${PAGE_SIZE}&offset=${
+          page * PAGE_SIZE
+        }`
+      );
       const data = await res.json();
       setItems(data.items || []);
       setTotal(data.total || 0);
-    } catch {}
-    finally { setLoading(false); }
-  }
+    } catch {
+      setItems([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [page]);
 
-  useEffect(() => { fetchItems(); }, [page]);
-
-  async function handleView(id: string) {
-    const res = await fetch(`${API_URL}/api/archive/${id}?user_id=${DEMO_USER_ID}`);
-    const data = await res.json();
-    alert(data.content || "No content available");
-  }
-
-  async function handleDelete(id: string) {
-    if (!confirm("Permanently delete this item from your archive and Pinecone?")) return;
-    await fetch(`${API_URL}/api/archive/${id}?user_id=${DEMO_USER_ID}`, { method: "DELETE" });
+  useEffect(() => {
     fetchItems();
+  }, [fetchItems]);
+
+  async function handleView(item: ArchiveItem) {
+    setNotice(null);
+    setViewItem(item);
+    setViewContent("");
+    setViewOpen(true);
+    setViewLoading(true);
+
+    try {
+      const res = await fetch(`${API_URL}/api/archive/${item.id}?user_id=${DEMO_USER_ID}`);
+      const data = await res.json();
+      setViewContent(data.content || "No content available");
+    } catch {
+      setViewContent("Unable to load decrypted content.");
+    } finally {
+      setViewLoading(false);
+    }
   }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+
+    setDeleting(true);
+    try {
+      await fetch(`${API_URL}/api/archive/${deleteTarget.id}?user_id=${DEMO_USER_ID}`, {
+        method: "DELETE",
+      });
+      setNotice("Archive item deleted.");
+      setDeleteTarget(null);
+      await fetchItems();
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  const hasNextPage = items.length === PAGE_SIZE;
 
   return (
-    <div className="max-w-5xl mx-auto">
-      <div className="mb-8">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs text-emerald-300 mb-4">
-          <span>🔒</span> Privacy Center
-        </div>
-        <h1 className="text-3xl font-bold text-white mb-2">Your Data Archive</h1>
-        <p className="text-gray-400">All ingested data — PII redacted. View the original or delete permanently from Postgres and Pinecone.</p>
-      </div>
+    <>
+      <div className="space-y-6">
+        <motion.section
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_360px]"
+        >
+          <Card>
+            <CardHeader>
+              <Badge className="w-fit">Privacy Center</Badge>
+              <CardTitle className="text-4xl">
+                Inspect what the system kept.
+              </CardTitle>
+              <CardDescription className="max-w-2xl text-base">
+                Review archived entries, open the decrypted original when needed, and forget records permanently from the archive surface.
+              </CardDescription>
+            </CardHeader>
+          </Card>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
-        {[
-          { label: "Total Items", value: total, icon: "📦" },
-          { label: "PII Redacted", value: total, icon: "🛡️" },
-          { label: "Encrypted", value: total, icon: "🔐" },
-        ].map(({ label, value, icon }) => (
-          <div key={label} className="glass rounded-xl p-4">
-            <div className="text-2xl mb-1">{icon}</div>
-            <div className="text-2xl font-bold text-white">{value}</div>
-            <div className="text-xs text-gray-400">{label}</div>
+          <div className="grid gap-4">
+            {[
+              { label: "Visible Records", value: items.length, icon: Database },
+              { label: "Current Page", value: page + 1, icon: Eye },
+              {
+                label: "Protected Mode",
+                value: total > 0 ? total : "On",
+                icon: LockKeyhole,
+              },
+            ].map(({ label, value, icon: Icon }) => (
+              <Card key={label}>
+                <CardContent className="flex items-center justify-between gap-4 pt-6">
+                  <div>
+                    <p className="mono-label mb-2">{label}</p>
+                    <p className="text-4xl font-semibold tracking-[-0.05em] text-white">
+                      {value}
+                    </p>
+                  </div>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05]">
+                    <Icon className="h-4 w-4 text-zinc-100" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
-        ))}
-      </div>
+        </motion.section>
 
-      {loading ? (
-        <div className="glass rounded-2xl p-16 text-center">
-          <div className="w-8 h-8 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Loading archive...</p>
-        </div>
-      ) : (
-        <>
-          <div className="glass rounded-2xl overflow-hidden">
-            <PrivacyTable items={items} onView={handleView} onDelete={handleDelete} />
-          </div>
-          <div className="flex items-center justify-between mt-4 text-sm text-gray-400 px-1">
-            <span>{total} total items</span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPage(p => Math.max(0, p - 1))}
-                disabled={page === 0}
-                className="px-3 py-1.5 rounded-lg glass glass-hover disabled:opacity-40 transition-all"
-              >
-                ← Prev
-              </button>
-              <span className="px-3 py-1.5 text-gray-300">Page {page + 1}</span>
-              <button
-                onClick={() => setPage(p => p + 1)}
-                disabled={(page + 1) * PAGE_SIZE >= total}
-                className="px-3 py-1.5 rounded-lg glass glass-hover disabled:opacity-40 transition-all"
-              >
-                Next →
-              </button>
+        {notice ? (
+          <Card className="border-white/15">
+            <CardContent className="pt-6 text-sm text-zinc-300">{notice}</CardContent>
+          </Card>
+        ) : null}
+
+        {loading ? (
+          <Card>
+            <CardContent className="py-20 text-center text-sm text-zinc-500">
+              Loading archive...
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <Card className="overflow-hidden">
+              <PrivacyTable
+                items={items}
+                onView={handleView}
+                onDelete={(item) => {
+                  setNotice(null);
+                  setDeleteTarget(item);
+                }}
+              />
+            </Card>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-zinc-500">
+                Page {page + 1}{" "}
+                {total
+                  ? `of roughly ${Math.max(1, Math.ceil(total / PAGE_SIZE))}`
+                  : ""}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => setPage((currentPage) => Math.max(0, currentPage - 1))}
+                  disabled={page === 0}
+                >
+                  Prev
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => setPage((currentPage) => currentPage + 1)}
+                  disabled={!hasNextPage}
+                >
+                  Next
+                </Button>
+              </div>
             </div>
+          </>
+        )}
+      </div>
+
+      <Dialog open={viewOpen} onOpenChange={setViewOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Decrypted archive entry</DialogTitle>
+            <DialogDescription>
+              {viewItem
+                ? `${viewItem.source} • ${new Date(viewItem.ingested_at).toLocaleString()}`
+                : "Loading entry"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto rounded-[24px] border border-white/10 bg-black/40 p-4">
+            {viewLoading ? (
+              <div className="flex items-center gap-3 text-sm text-zinc-400">
+                <Shield className="h-4 w-4" />
+                Loading decrypted content...
+              </div>
+            ) : (
+              <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-7 text-zinc-300">
+                {viewContent}
+              </pre>
+            )}
           </div>
-        </>
-      )}
-    </div>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setViewOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Forget archive item</DialogTitle>
+            <DialogDescription>
+              This removes the selected entry from the archive surface. Use it when a record should no longer be retained.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button onClick={handleDelete} disabled={deleting}>
+              {deleting ? "Forgetting..." : "Forget Item"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

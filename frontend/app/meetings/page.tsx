@@ -1,5 +1,34 @@
 "use client";
-import { useState, useEffect } from "react";
+
+import { useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import {
+  ArrowUpRight,
+  CalendarDays,
+  Clock3,
+  Plus,
+  Users,
+} from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 const DEMO_USER_ID = "d4c615b8-cedc-4c97-80ed-2c8373610d78";
@@ -16,14 +45,28 @@ interface Meeting {
 export default function MeetingsPage() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [topic, setTopic] = useState("");
   const [attendees, setAttendees] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { fetchMeetings(); }, []);
+  useEffect(() => {
+    fetchMeetings();
+  }, []);
+
+  const upcomingCount = useMemo(
+    () =>
+      meetings.filter((meeting) => new Date(meeting.scheduled_at) > new Date())
+        .length,
+    [meetings]
+  );
+  const preppedCount = useMemo(
+    () => meetings.filter((meeting) => meeting.status === "prepped").length,
+    [meetings]
+  );
 
   async function fetchMeetings() {
     setLoading(true);
@@ -32,14 +75,22 @@ export default function MeetingsPage() {
       if (res.ok) {
         const data = await res.json();
         setMeetings(data.meetings || []);
+      } else {
+        setMeetings([]);
       }
-    } catch {}
-    finally { setLoading(false); }
+    } catch {
+      setMeetings([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function scheduleMeeting(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitting(true); setSuccess(null);
+    setSubmitting(true);
+    setSuccess(null);
+    setError(null);
+
     try {
       const res = await fetch(`${API_URL}/api/meetings`, {
         method: "POST",
@@ -47,174 +98,238 @@ export default function MeetingsPage() {
         body: JSON.stringify({
           user_id: DEMO_USER_ID,
           topic,
-          attendees: attendees.split(",").map(a => a.trim()).filter(Boolean),
+          attendees: attendees
+            .split(",")
+            .map((entry) => entry.trim())
+            .filter((entry) => entry.length > 0),
           scheduled_at: scheduledAt || new Date().toISOString(),
         }),
       });
       if (!res.ok) throw new Error();
-      setSuccess("Meeting scheduled — AI prep card will appear in your Feed.");
-      setTopic(""); setAttendees(""); setScheduledAt("");
-      setShowForm(false);
-      fetchMeetings();
+      setSuccess("Meeting scheduled. The prep card will appear in the feed.");
+      setTopic("");
+      setAttendees("");
+      setScheduledAt("");
+      setDialogOpen(false);
+      await fetchMeetings();
     } catch {
-      setSuccess(null);
+      setError("Scheduling failed. Please try again.");
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <div className="flex items-start justify-between mb-8">
-        <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs text-amber-300 mb-4">
-            <span>📅</span> Meetings
-          </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Scheduled Meetings</h1>
-          <p className="text-gray-400">Schedule a meeting and get an AI-generated prep card before it starts.</p>
-        </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="mt-6 flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white px-4 py-2.5 rounded-lg font-medium text-sm transition-all shadow-lg"
+    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <div className="space-y-6">
+        <motion.section
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_340px]"
         >
-          <span className="text-lg">+</span> Schedule Meeting
-        </button>
+          <Card>
+            <CardHeader>
+              <Badge className="w-fit">Meetings</Badge>
+              <CardTitle className="text-4xl">
+                Schedule the room, prep the context.
+              </CardTitle>
+              <CardDescription className="max-w-2xl text-base">
+                Add a meeting once and the system can generate prep material before the conversation starts.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-3 border-t border-white/10 pt-6">
+              <DialogTrigger asChild>
+                <Button size="lg">
+                  <Plus className="h-4 w-4" />
+                  Schedule Meeting
+                </Button>
+              </DialogTrigger>
+              <Button variant="secondary" size="lg" onClick={() => fetchMeetings()}>
+                Refresh List
+              </Button>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-4">
+            {[
+              { label: "Upcoming", value: upcomingCount, icon: CalendarDays },
+              { label: "Prepped", value: preppedCount, icon: Clock3 },
+            ].map(({ label, value, icon: Icon }) => (
+              <Card key={label}>
+                <CardContent className="flex items-center justify-between gap-4 pt-6">
+                  <div>
+                    <p className="mono-label mb-2">{label}</p>
+                    <p className="text-4xl font-semibold tracking-[-0.05em] text-white">
+                      {value}
+                    </p>
+                  </div>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05]">
+                    <Icon className="h-4 w-4 text-zinc-100" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </motion.section>
+
+        {success ? (
+          <Card className="border-white/15">
+            <CardContent className="pt-6 text-sm text-zinc-300">{success}</CardContent>
+          </Card>
+        ) : null}
+        {error ? (
+          <Card className="border-white/15">
+            <CardContent className="pt-6 text-sm text-zinc-400">{error}</CardContent>
+          </Card>
+        ) : null}
+
+        {loading ? (
+          <div className="space-y-4">
+            {[1, 2, 3].map((item) => (
+              <Card key={item} className="animate-pulse">
+                <CardContent className="space-y-4 pt-6">
+                  <div className="h-5 w-1/3 rounded-full bg-white/10" />
+                  <div className="h-4 w-1/2 rounded-full bg-white/5" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : meetings.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center gap-4 py-20 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-3xl border border-white/10 bg-white/[0.05]">
+                <CalendarDays className="h-6 w-6 text-zinc-100" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-semibold text-white">No meetings scheduled</h2>
+                <p className="text-sm leading-7 text-zinc-500">
+                  Create a meeting to start generating prep material and follow-up context.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {meetings.map((meeting, index) => (
+              <motion.div
+                key={meeting.id}
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, delay: index * 0.03 }}
+              >
+                <MeetingCard meeting={meeting} />
+              </motion.div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Schedule Form */}
-      {showForm && (
-        <form onSubmit={scheduleMeeting} className="glass rounded-2xl p-6 mb-6 space-y-4 animate-fade-in glow-amber">
-          <h2 className="text-white font-semibold text-lg">New Meeting</h2>
-          <div>
-            <label className="block text-xs text-gray-400 uppercase tracking-wide mb-1.5">Meeting Topic</label>
-            <input
+      <DialogContent>
+        <form onSubmit={scheduleMeeting} className="space-y-5">
+          <DialogHeader>
+            <DialogTitle>Schedule meeting</DialogTitle>
+            <DialogDescription>
+              Add the topic, participants, and time. Prep content will appear in the feed once the backend completes the job.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <label className="mono-label">Meeting Topic</label>
+            <Input
               type="text"
               value={topic}
-              onChange={e => setTopic(e.target.value)}
-              placeholder="Q2 Roadmap Review with Marcus"
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder="Q2 roadmap review with Marcus"
               required
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-amber-500 transition-colors"
             />
           </div>
-          <div>
-            <label className="block text-xs text-gray-400 uppercase tracking-wide mb-1.5">Attendees (comma-separated emails)</label>
-            <input
+
+          <div className="space-y-2">
+            <label className="mono-label">Attendees</label>
+            <Input
               type="text"
               value={attendees}
-              onChange={e => setAttendees(e.target.value)}
+              onChange={(e) => setAttendees(e.target.value)}
               placeholder="marcus@client.com, sarah@vc.com"
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-amber-500 transition-colors"
             />
           </div>
-          <div>
-            <label className="block text-xs text-gray-400 uppercase tracking-wide mb-1.5">Date & Time</label>
-            <input
+
+          <div className="space-y-2">
+            <label className="mono-label">Date and Time</label>
+            <Input
               type="datetime-local"
               value={scheduledAt}
-              onChange={e => setScheduledAt(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-amber-500 transition-colors"
+              onChange={(e) => setScheduledAt(e.target.value)}
             />
           </div>
-          <div className="flex gap-3">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 disabled:opacity-50 text-white py-2.5 rounded-lg font-medium transition-all"
-            >
-              {submitting ? "Scheduling..." : "Schedule & Generate Prep"}
-            </button>
-            <button
+
+          <DialogFooter>
+            <Button
               type="button"
-              onClick={() => setShowForm(false)}
-              className="px-4 py-2.5 rounded-lg glass glass-hover text-gray-400"
+              variant="secondary"
+              onClick={() => setDialogOpen(false)}
             >
               Cancel
-            </button>
-          </div>
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Scheduling..." : "Create Meeting"}
+            </Button>
+          </DialogFooter>
         </form>
-      )}
-
-      {success && (
-        <div className="mb-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm animate-fade-in">
-          ✅ {success}
-        </div>
-      )}
-
-      {/* Meetings List */}
-      {loading ? (
-        <div className="space-y-3">
-          {[1,2,3].map(i => (
-            <div key={i} className="glass rounded-xl p-5 animate-pulse">
-              <div className="h-4 bg-white/10 rounded w-1/2 mb-3" />
-              <div className="h-3 bg-white/5 rounded w-1/3" />
-            </div>
-          ))}
-        </div>
-      ) : meetings.length === 0 ? (
-        <div className="glass rounded-2xl p-16 text-center">
-          <div className="text-5xl mb-4">📅</div>
-          <p className="text-lg text-white font-medium mb-2">No meetings scheduled</p>
-          <p className="text-sm text-gray-500">Click "Schedule Meeting" to add one and get an AI prep card.</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {meetings.map((m) => (
-            <MeetingCard key={m.id} meeting={m} />
-          ))}
-        </div>
-      )}
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 function MeetingCard({ meeting }: { meeting: Meeting }) {
   const date = new Date(meeting.scheduled_at);
   const isUpcoming = date > new Date();
-
-  // Extract meet link from summary if present
   const meetLink = meeting.summary?.match(/Meet Link: (https?:\/\/[^\s]+)/)?.[1];
+  const summaryText = meeting.summary?.replace(/Meet Link:.*/, "").trim();
 
   return (
-    <div className={`glass rounded-xl p-5 animate-fade-in ${isUpcoming ? "glow-amber" : ""}`}>
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <span className={`w-2 h-2 rounded-full ${isUpcoming ? "bg-amber-400 animate-pulse" : "bg-gray-600"}`} />
-            <span className={`text-xs font-medium ${isUpcoming ? "text-amber-400" : "text-gray-500"}`}>
-              {isUpcoming ? "Upcoming" : "Past"}
-            </span>
+    <Card className="transition-transform duration-200 hover:-translate-y-0.5">
+      <CardContent className="pt-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <Badge variant={isUpcoming ? "default" : "secondary"}>
+                {isUpcoming ? "Upcoming" : "Past"}
+              </Badge>
+              <div className="flex items-center gap-2 text-sm text-zinc-500">
+                <Clock3 className="h-4 w-4" />
+                {date.toLocaleString()}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-xl font-semibold text-white">{meeting.topic}</h3>
+              {meeting.attendees?.length > 0 ? (
+                <div className="flex items-start gap-2 text-sm leading-7 text-zinc-400">
+                  <Users className="mt-1 h-4 w-4 shrink-0" />
+                  <span>{meeting.attendees.join(", ")}</span>
+                </div>
+              ) : null}
+            </div>
+
+            {summaryText ? (
+              <div className="rounded-[22px] border border-white/10 bg-black/30 p-4">
+                <p className="mono-label mb-2">Prep Summary</p>
+                <p className="text-sm leading-7 text-zinc-300">{summaryText}</p>
+              </div>
+            ) : null}
           </div>
-          <h3 className="text-white font-semibold text-base">{meeting.topic}</h3>
-          {meeting.attendees?.length > 0 && (
-            <p className="text-gray-400 text-sm mt-1">
-              👥 {meeting.attendees.join(", ")}
-            </p>
-          )}
-          {meetLink && (
-            <a
-              href={meetLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs hover:bg-emerald-500/30 transition-all"
-            >
-              <span>📹</span> Join Meeting
-            </a>
-          )}
-          {meeting.summary && !meetLink && (
-            <p className="text-gray-300 text-sm mt-2 leading-relaxed border-t border-white/10 pt-2">
-              {meeting.summary.replace(/Meet Link:.*/, "").trim()}
-            </p>
-          )}
+
+          {meetLink ? (
+            <Button asChild variant="secondary" className="shrink-0">
+              <a href={meetLink} target="_blank" rel="noopener noreferrer">
+                Join Meeting
+                <ArrowUpRight className="h-4 w-4" />
+              </a>
+            </Button>
+          ) : null}
         </div>
-        <div className="text-right ml-4 shrink-0">
-          <p className="text-white text-sm font-medium">
-            {date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-          </p>
-          <p className="text-gray-400 text-xs">
-            {date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-          </p>
-        </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
