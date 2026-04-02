@@ -16,7 +16,7 @@ A distributed, event-driven AI platform that gives founders a personal intellige
 cp .env.example .env
 
 # 2. Boot in simulator mode (no credentials needed)
-docker compose up
+make dev-sim
 
 # 3. Visit the dashboard
 open http://localhost:3001
@@ -53,10 +53,13 @@ open http://localhost:3001
 
 ```bash
 # Simulate (default — no credentials needed)
-INGESTION_MODE=simulate docker compose up
+make dev-sim
 
 # Live Google/Slack data
-INGESTION_MODE=real docker compose up
+make dev-real
+
+# Infra only (postgres + redis)
+make infra-up
 ```
 
 ## Seed Knowledge Base
