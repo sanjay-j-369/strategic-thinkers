@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
+from app.security import resolve_user
 from app.schemas.events import (
     FounderEvent, FounderEventMetadata, FounderEventPayload, TaskType, Source
 )
@@ -11,32 +12,26 @@ router = APIRouter(prefix="/api/ingest", tags=["ingest"])
 
 
 class EmailIngestRequest(BaseModel):
-    user_id: str
+    user_id: str | None = None
     from_address: str
     subject: str
     body: str
 
 
 class SlackIngestRequest(BaseModel):
-    user_id: str
+    user_id: str | None = None
     channel: str
     message: str
 
 
-def _safe_uuid(user_id: str) -> uuid.UUID:
-    try:
-        return uuid.UUID(user_id)
-    except ValueError:
-        return uuid.uuid4()
-
-
 @router.post("/email")
-def ingest_email(body: EmailIngestRequest):
+async def ingest_email(body: EmailIngestRequest, request: Request):
     from app.workers.celery_app import celery_app
+    user = await resolve_user(request, user_id=body.user_id)
 
     event = FounderEvent(
         metadata=FounderEventMetadata(
-            user_id=_safe_uuid(body.user_id),
+            user_id=user.id,
             trace_id=str(uuid.uuid4()),
             timestamp=datetime.now(timezone.utc),
         ),
@@ -55,13 +50,14 @@ def ingest_email(body: EmailIngestRequest):
 
 
 @router.post("/slack")
-def ingest_slack(body: SlackIngestRequest):
+async def ingest_slack(body: SlackIngestRequest, request: Request):
     from app.workers.celery_app import celery_app
+    user = await resolve_user(request, user_id=body.user_id)
 
     channel = body.channel if body.channel.startswith("#") else f"#{body.channel}"
     event = FounderEvent(
         metadata=FounderEventMetadata(
-            user_id=_safe_uuid(body.user_id),
+            user_id=user.id,
             trace_id=str(uuid.uuid4()),
             timestamp=datetime.now(timezone.utc),
         ),

@@ -1,8 +1,10 @@
 import os
 from fastapi import APIRouter, Request, Query, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
+
 from app.models.archive import Archive
 from app.pipeline.encryption import decrypt
+from app.security import resolve_user
 
 router = APIRouter(prefix="/api/archive", tags=["privacy"])
 
@@ -10,49 +12,59 @@ router = APIRouter(prefix="/api/archive", tags=["privacy"])
 @router.get("")
 async def list_archive(
     request: Request,
-    user_id: str = Query(..., description="User UUID"),
+    user_id: str | None = Query(None, description="User UUID"),
     limit: int = Query(20, le=100),
     offset: int = Query(0),
 ):
     """Paginated list of archive items — metadata only, no decryption."""
+    user = await resolve_user(request, user_id=user_id)
     async_session = request.app.state.async_session
     async with async_session() as session:
         result = await session.execute(
             select(Archive)
-            .where(Archive.user_id == user_id)
+            .where(Archive.user_id == user.id)
             .order_by(Archive.ingested_at.desc())
             .limit(limit)
             .offset(offset)
         )
         items = result.scalars().all()
-    return {"items": [item.to_dict() for item in items], "total": len(items)}
+        total = await session.scalar(
+            select(func.count()).select_from(Archive).where(Archive.user_id == user.id)
+        )
+    return {"items": [item.to_dict() for item in items], "total": total or 0}
 
 
 @router.get("/{item_id}")
-async def get_archive_item(item_id: str, request: Request, user_id: str = Query(...)):
+async def get_archive_item(
+    item_id: str, request: Request, user_id: str | None = Query(None)
+):
     """Decrypt and return a single archive item."""
+    user = await resolve_user(request, user_id=user_id)
     async_session = request.app.state.async_session
     async with async_session() as session:
         result = await session.execute(
-            select(Archive).where(Archive.id == item_id, Archive.user_id == user_id)
+            select(Archive).where(Archive.id == item_id, Archive.user_id == user.id)
         )
         item = result.scalar_one_or_none()
         if not item:
             raise HTTPException(status_code=404, detail="Archive item not found")
 
-        plaintext = decrypt(user_id, item.content_enc)
+        plaintext = decrypt(str(user.id), item.content_enc)
         data = item.to_dict()
         data["content"] = plaintext
     return data
 
 
 @router.delete("/{item_id}")
-async def delete_archive_item(item_id: str, request: Request, user_id: str = Query(...)):
+async def delete_archive_item(
+    item_id: str, request: Request, user_id: str | None = Query(None)
+):
     """Delete from Postgres and remove vector from Pinecone."""
+    user = await resolve_user(request, user_id=user_id)
     async_session = request.app.state.async_session
     async with async_session() as session:
         result = await session.execute(
-            select(Archive).where(Archive.id == item_id, Archive.user_id == user_id)
+            select(Archive).where(Archive.id == item_id, Archive.user_id == user.id)
         )
         item = result.scalar_one_or_none()
         if not item:

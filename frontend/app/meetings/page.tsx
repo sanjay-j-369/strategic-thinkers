@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowUpRight,
@@ -29,9 +29,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
-const DEMO_USER_ID = "d4c615b8-cedc-4c97-80ed-2c8373610d78";
+import { apiFetch } from "@/lib/api";
+import { useRequireAuth } from "@/lib/use-require-auth";
 
 interface Meeting {
   id: string;
@@ -43,6 +42,7 @@ interface Meeting {
 }
 
 export default function MeetingsPage() {
+  const { ready, token } = useRequireAuth();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -52,10 +52,6 @@ export default function MeetingsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchMeetings();
-  }, []);
 
   const upcomingCount = useMemo(
     () =>
@@ -68,55 +64,66 @@ export default function MeetingsPage() {
     [meetings]
   );
 
-  async function fetchMeetings() {
+  const fetchMeetings = useCallback(async () => {
+    if (!token) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/meetings?user_id=${DEMO_USER_ID}`);
-      if (res.ok) {
-        const data = await res.json();
-        setMeetings(data.meetings || []);
-      } else {
-        setMeetings([]);
-      }
+      const data = await apiFetch<{ meetings: Meeting[] }>("/api/meetings", { token });
+      setMeetings(data.meetings || []);
     } catch {
       setMeetings([]);
     } finally {
       setLoading(false);
     }
-  }
+  }, [token]);
+
+  useEffect(() => {
+    if (ready) {
+      void fetchMeetings();
+    }
+  }, [fetchMeetings, ready]);
 
   async function scheduleMeeting(e: React.FormEvent) {
     e.preventDefault();
+    if (!token) return;
     setSubmitting(true);
     setSuccess(null);
     setError(null);
 
     try {
-      const res = await fetch(`${API_URL}/api/meetings`, {
+      await apiFetch("/api/meetings", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: DEMO_USER_ID,
+        token,
+        json: {
           topic,
           attendees: attendees
             .split(",")
             .map((entry) => entry.trim())
             .filter((entry) => entry.length > 0),
           scheduled_at: scheduledAt || new Date().toISOString(),
-        }),
+        },
       });
-      if (!res.ok) throw new Error();
       setSuccess("Meeting scheduled. The prep card will appear in the feed.");
       setTopic("");
       setAttendees("");
       setScheduledAt("");
       setDialogOpen(false);
       await fetchMeetings();
-    } catch {
-      setError("Scheduling failed. Please try again.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Scheduling failed.");
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (!ready) {
+    return (
+      <Card>
+        <CardContent className="py-20 text-center text-sm text-zinc-500">
+          Loading meetings...
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
@@ -134,7 +141,7 @@ export default function MeetingsPage() {
                 Schedule the room, prep the context.
               </CardTitle>
               <CardDescription className="max-w-2xl text-base">
-                Add a meeting once and the system can generate prep material before the conversation starts.
+                Add a meeting manually or let synced Google Calendar events populate this view and queue prep cards for the feed.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-3 border-t border-white/10 pt-6">
@@ -203,7 +210,7 @@ export default function MeetingsPage() {
               <div className="space-y-2">
                 <h2 className="text-xl font-semibold text-white">No meetings scheduled</h2>
                 <p className="text-sm leading-7 text-zinc-500">
-                  Create a meeting to start generating prep material and follow-up context.
+                  Create one manually or sync Google Calendar from the ingest page.
                 </p>
               </div>
             </CardContent>

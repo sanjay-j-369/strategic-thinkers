@@ -1,8 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Inbox, Mail, MessageSquare, Shield, Sparkles } from "lucide-react";
+import {
+  CalendarSync,
+  Inbox,
+  Mail,
+  MessageSquare,
+  Shield,
+  Sparkles,
+  Unplug,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,28 +22,52 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
-const DEMO_USER_ID = "d4c615b8-cedc-4c97-80ed-2c8373610d78";
+import { apiFetch } from "@/lib/api";
+import { useRequireAuth } from "@/lib/use-require-auth";
 
 type Tab = "email" | "slack";
+type Provider = "google" | "slack";
+
+interface IntegrationStatus {
+  google: {
+    connected: boolean;
+    last_synced_at: string | null;
+  };
+  slack: {
+    connected: boolean;
+    team_id: string | null;
+    channel_ids: string[];
+    last_synced_at: string | null;
+  };
+}
+
+const DEFAULT_INTEGRATIONS: IntegrationStatus = {
+  google: {
+    connected: false,
+    last_synced_at: null,
+  },
+  slack: {
+    connected: false,
+    team_id: null,
+    channel_ids: [],
+    last_synced_at: null,
+  },
+};
 
 export default function IngestPage() {
+  const router = useRouter();
+  const { ready, token, user, refreshSession } = useRequireAuth();
+
   const [tab, setTab] = useState<Tab>("email");
-  const [loading, setLoading] = useState(false);
+  const [submittingManual, setSubmittingManual] = useState(false);
+  const [busyProvider, setBusyProvider] = useState<Provider | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [comingSoon, setComingSoon] = useState<string | null>(null);
+  const [integrations, setIntegrations] =
+    useState<IntegrationStatus>(DEFAULT_INTEGRATIONS);
+  const [integrationsLoading, setIntegrationsLoading] = useState(true);
 
   const [emailFrom, setEmailFrom] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
@@ -47,24 +80,73 @@ export default function IngestPage() {
     process.env.NEXT_PUBLIC_ALLOW_MANUAL_INGESTION === "true" ||
     process.env.NEXT_PUBLIC_INGESTION_MODE === "simulate";
 
+  const refreshIntegrations = useCallback(async () => {
+    if (!token) return;
+    setIntegrationsLoading(true);
+    try {
+      const data = await apiFetch<IntegrationStatus>("/api/auth/integrations", {
+        token,
+      });
+      setIntegrations(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load integrations.");
+    } finally {
+      setIntegrationsLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (ready) {
+      void refreshIntegrations();
+    }
+  }, [ready, refreshIntegrations]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const integration = params.get("integration");
+    const status = params.get("status");
+    const message = params.get("message");
+    if (!integration || !status) return;
+
+    if (status === "connected") {
+      setSuccess(
+        `${integration === "google" ? "Google" : "Slack"} connected successfully.`
+      );
+      setError(null);
+      void refreshIntegrations();
+      void refreshSession();
+    } else {
+      setError(
+        message ||
+          `${integration === "google" ? "Google" : "Slack"} connection failed.`
+      );
+    }
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete("integration");
+    url.searchParams.delete("status");
+    url.searchParams.delete("message");
+    router.replace(url.pathname + url.search);
+  }, [refreshIntegrations, refreshSession, router]);
+
   async function submitEmail(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
+    if (!token) return;
+    setSubmittingManual(true);
     setSuccess(null);
     setError(null);
 
     try {
-      const res = await fetch(`${API_URL}/api/ingest/email`, {
+      await apiFetch("/api/ingest/email", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: DEMO_USER_ID,
+        token,
+        json: {
           from_address: emailFrom,
           subject: emailSubject,
           body: emailBody,
-        }),
+        },
       });
-      if (!res.ok) throw new Error(`Error ${res.status}`);
       setSuccess("Email ingested. Check the feed for the processed card.");
       setEmailFrom("");
       setEmailSubject("");
@@ -72,88 +154,199 @@ export default function IngestPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Request failed.");
     } finally {
-      setLoading(false);
+      setSubmittingManual(false);
     }
   }
 
   async function submitSlack(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
+    if (!token) return;
+    setSubmittingManual(true);
     setSuccess(null);
     setError(null);
 
     try {
-      const res = await fetch(`${API_URL}/api/ingest/slack`, {
+      await apiFetch("/api/ingest/slack", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: DEMO_USER_ID,
+        token,
+        json: {
           channel: slackChannel,
           message: slackMessage,
-        }),
+        },
       });
-      if (!res.ok) throw new Error(`Error ${res.status}`);
       setSuccess("Slack message ingested. Check the feed for the update.");
       setSlackChannel("");
       setSlackMessage("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Request failed.");
     } finally {
-      setLoading(false);
+      setSubmittingManual(false);
     }
   }
 
-  if (!allowManual) {
-    return (
-      <>
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <Badge className="w-fit">Data Integrations</Badge>
-              <CardTitle className="text-4xl">Connect your operating surface.</CardTitle>
-              <CardDescription className="max-w-2xl text-base">
-                Plug in Google and Slack to stream context continuously, or wait for manual ingestion to stay enabled in simulate mode.
-              </CardDescription>
-            </CardHeader>
-          </Card>
+  async function startOAuth(provider: Provider) {
+    if (!token) return;
+    setBusyProvider(provider);
+    setSuccess(null);
+    setError(null);
 
+    try {
+      const data = await apiFetch<{ auth_url: string }>(
+        `/api/auth/${provider}/start`,
+        {
+          method: "POST",
+          token,
+          json: { return_to: "/ingest" },
+        }
+      );
+      window.location.assign(data.auth_url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Connection failed.");
+      setBusyProvider(null);
+    }
+  }
+
+  async function disconnectProvider(provider: Provider) {
+    if (!token) return;
+    setBusyProvider(provider);
+    setSuccess(null);
+    setError(null);
+
+    try {
+      await apiFetch(`/api/auth/${provider}/disconnect`, {
+        method: "DELETE",
+        token,
+      });
+      setSuccess(
+        `${provider === "google" ? "Google" : "Slack"} disconnected successfully.`
+      );
+      await refreshIntegrations();
+      await refreshSession();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Disconnect failed.");
+    } finally {
+      setBusyProvider(null);
+    }
+  }
+
+  async function syncProvider(provider: Provider) {
+    if (!token) return;
+    setBusyProvider(provider);
+    setSuccess(null);
+    setError(null);
+
+    try {
+      if (provider === "google") {
+        const data = await apiFetch<{
+          gmail_events: number;
+          calendar_events: number;
+          prep_cards: number;
+        }>("/api/auth/google/sync", {
+          method: "POST",
+          token,
+        });
+        setSuccess(
+          `Google synced. ${data.gmail_events} email events, ${data.calendar_events} calendar meetings, ${data.prep_cards} prep cards queued.`
+        );
+      } else {
+        const data = await apiFetch<{
+          channels: string[];
+          messages: number;
+        }>("/api/auth/slack/sync", {
+          method: "POST",
+          token,
+        });
+        setSuccess(
+          `Slack synced. ${data.messages} messages pulled from ${data.channels.length} channels.`
+        );
+      }
+      await refreshIntegrations();
+      await refreshSession();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sync failed.");
+    } finally {
+      setBusyProvider(null);
+    }
+  }
+
+  if (!ready) {
+    return (
+      <Card>
+        <CardContent className="py-20 text-center text-sm text-zinc-500">
+          Loading integrations...
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <motion.section
+        initial={{ opacity: 0, y: 18 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_360px]"
+      >
+        <Card>
+          <CardHeader>
+            <Badge className="w-fit">Connected Sources</Badge>
+            <CardTitle className="text-4xl">
+              Sync context instead of pasting it by hand.
+            </CardTitle>
+            <CardDescription className="max-w-2xl text-base">
+              Connect Google and Slack for {user?.email}. Pull fresh meetings, email, and channel context into the feed, then use manual ingestion only as fallback.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <Badge variant="secondary" className="w-fit">
+              Account
+            </Badge>
+            <CardTitle className="text-2xl">{user?.full_name || user?.email}</CardTitle>
+            <CardDescription>
+              Google connected: {integrations.google.connected ? "Yes" : "No"}.
+              Slack connected: {integrations.slack.connected ? "Yes" : "No"}.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </motion.section>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_360px]">
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-4"
+        >
           <div className="grid gap-4 md:grid-cols-2">
-            {[
-              {
-                key: "google",
-                title: "Google Mail and Calendar",
-                description:
-                  "Automatically ingest email context and keep meeting prep in sync.",
-                icon: Mail,
-              },
-              {
-                key: "slack",
-                title: "Slack",
-                description:
-                  "Listen for updates in important channels without manual copy and paste.",
-                icon: MessageSquare,
-              },
-            ].map(({ key, title, description, icon: Icon }) => (
-              <Card
-                key={key}
-                className="transition-transform duration-200 hover:-translate-y-0.5"
-              >
-                <CardContent className="flex h-full flex-col justify-between gap-8 pt-6">
-                  <div className="space-y-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06]">
-                      <Icon className="h-5 w-5 text-zinc-100" />
-                    </div>
-                    <div className="space-y-2">
-                      <h2 className="text-xl font-semibold text-white">{title}</h2>
-                      <p className="text-sm leading-7 text-zinc-400">{description}</p>
-                    </div>
-                  </div>
-                  <Button variant="secondary" onClick={() => setComingSoon(title)}>
-                    Request Access
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+            <IntegrationCard
+              title="Google Mail and Calendar"
+              description="Connect once, then sync recent Gmail and upcoming Google Calendar events into your feed and meetings view."
+              icon={Mail}
+              connected={integrations.google.connected}
+              lastSyncedAt={integrations.google.last_synced_at}
+              loading={integrationsLoading || busyProvider === "google"}
+              onConnect={() => startOAuth("google")}
+              onSync={() => syncProvider("google")}
+              onDisconnect={() => disconnectProvider("google")}
+            />
+
+            <IntegrationCard
+              title="Slack"
+              description="Connect your workspace and sync recent channel messages so the feed can update without manual copy and paste."
+              icon={MessageSquare}
+              connected={integrations.slack.connected}
+              lastSyncedAt={integrations.slack.last_synced_at}
+              loading={integrationsLoading || busyProvider === "slack"}
+              subtitle={
+                integrations.slack.channel_ids.length > 0
+                  ? `${integrations.slack.channel_ids.length} channels selected`
+                  : "Defaults to your first accessible channels on initial sync"
+              }
+              onConnect={() => startOAuth("slack")}
+              onSync={() => syncProvider("slack")}
+              onDisconnect={() => disconnectProvider("slack")}
+            />
           </div>
 
           {success ? (
@@ -161,206 +354,255 @@ export default function IngestPage() {
               <CardContent className="pt-6 text-sm text-zinc-300">{success}</CardContent>
             </Card>
           ) : null}
-        </div>
+          {error ? (
+            <Card className="border-white/15">
+              <CardContent className="pt-6 text-sm text-zinc-400">{error}</CardContent>
+            </Card>
+          ) : null}
 
-        <Dialog
-          open={Boolean(comingSoon)}
-          onOpenChange={(open) => !open && setComingSoon(null)}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{comingSoon}</DialogTitle>
-              <DialogDescription>
-                The integration flow is not wired yet. This screen is now styled and ready for the actual OAuth handshake when the backend is available.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="secondary" onClick={() => setComingSoon(null)}>
-                Close
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </>
-    );
-  }
+          {allowManual ? (
+            <>
+              <Card>
+                <CardHeader>
+                  <Badge variant="secondary" className="w-fit">
+                    Manual Fallback
+                  </Badge>
+                  <CardTitle className="text-3xl">Use manual ingestion only when needed.</CardTitle>
+                  <CardDescription>
+                    Sync should be the default path now, but you can still paste a one-off email or Slack message if required.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
 
-  return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_360px]">
-      <motion.div
-        initial={{ opacity: 0, y: 18 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="space-y-4"
-      >
-        <Card>
-          <CardHeader>
-            <Badge className="w-fit">Manual Ingestion</Badge>
-            <CardTitle className="text-4xl">
-              Drop in raw context, keep the UI clean.
-            </CardTitle>
-            <CardDescription className="max-w-2xl text-base">
-              Paste email or Slack content and the pipeline will redact PII, encrypt content, and route the useful parts into the feed.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="inline-flex rounded-full border border-white/10 bg-black/30 p-1">
+                    {(["email", "slack"] as Tab[]).map((currentTab) => {
+                      const active = tab === currentTab;
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="inline-flex rounded-full border border-white/10 bg-black/30 p-1">
-              {(["email", "slack"] as Tab[]).map((currentTab) => {
-                const active = tab === currentTab;
+                      return (
+                        <Button
+                          key={currentTab}
+                          variant={active ? "default" : "ghost"}
+                          size="sm"
+                          onClick={() => {
+                            setTab(currentTab);
+                            setSuccess(null);
+                            setError(null);
+                          }}
+                          className="min-w-[120px]"
+                        >
+                          {currentTab === "email" ? (
+                            <Mail className="h-4 w-4" />
+                          ) : (
+                            <MessageSquare className="h-4 w-4" />
+                          )}
+                          {currentTab === "email" ? "Email" : "Slack"}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
 
-                return (
-                  <Button
-                    key={currentTab}
-                    variant={active ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => {
-                      setTab(currentTab);
-                      setSuccess(null);
-                      setError(null);
-                    }}
-                    className="min-w-[120px]"
-                  >
-                    {currentTab === "email" ? (
-                      <Mail className="h-4 w-4" />
+              <motion.div
+                key={tab}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <Card>
+                  <CardContent className="pt-6">
+                    {tab === "email" ? (
+                      <form onSubmit={submitEmail} className="space-y-5">
+                        <div className="space-y-2">
+                          <label className="mono-label">From</label>
+                          <Input
+                            type="email"
+                            value={emailFrom}
+                            onChange={(e) => setEmailFrom(e.target.value)}
+                            placeholder="investor@vc-firm.com"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="mono-label">Subject</label>
+                          <Input
+                            type="text"
+                            value={emailSubject}
+                            onChange={(e) => setEmailSubject(e.target.value)}
+                            placeholder="Re: Q2 roadmap review"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="mono-label">Body</label>
+                          <Textarea
+                            value={emailBody}
+                            onChange={(e) => setEmailBody(e.target.value)}
+                            placeholder="Paste the email body here..."
+                            required
+                            rows={8}
+                          />
+                        </div>
+                        <SubmitButton
+                          loading={submittingManual}
+                          label="Ingest Email"
+                        />
+                      </form>
                     ) : (
-                      <MessageSquare className="h-4 w-4" />
+                      <form onSubmit={submitSlack} className="space-y-5">
+                        <div className="space-y-2">
+                          <label className="mono-label">Channel</label>
+                          <Input
+                            type="text"
+                            value={slackChannel}
+                            onChange={(e) => setSlackChannel(e.target.value)}
+                            placeholder="engineering"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="mono-label">Message</label>
+                          <Textarea
+                            value={slackMessage}
+                            onChange={(e) => setSlackMessage(e.target.value)}
+                            placeholder="Paste the Slack message here..."
+                            required
+                            rows={8}
+                          />
+                        </div>
+                        <SubmitButton
+                          loading={submittingManual}
+                          label="Ingest Message"
+                        />
+                      </form>
                     )}
-                    {currentTab === "email" ? "Email" : "Slack"}
-                  </Button>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </>
+          ) : (
+            <Card>
+              <CardContent className="pt-6 text-sm leading-7 text-zinc-400">
+                Manual ingestion is disabled in this environment. Connect Google and Slack above, then use the sync buttons to populate the feed.
+              </CardContent>
+            </Card>
+          )}
+        </motion.div>
 
-        <motion.div
-          key={tab}
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2 }}
-        >
-          <Card>
-            <CardContent className="pt-6">
-              {tab === "email" ? (
-                <form onSubmit={submitEmail} className="space-y-5">
-                  <div className="space-y-2">
-                    <label className="mono-label">From</label>
-                    <Input
-                      type="email"
-                      value={emailFrom}
-                      onChange={(e) => setEmailFrom(e.target.value)}
-                      placeholder="investor@vc-firm.com"
-                      required
-                    />
+        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}>
+          <Card className="h-full">
+            <CardHeader>
+              <Badge variant="secondary" className="w-fit">
+                Processing Path
+              </Badge>
+              <CardTitle className="text-2xl">
+                Connected sync becomes the default workflow.
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {[
+                {
+                  icon: CalendarSync,
+                  title: "Connect",
+                  body: "Authorize Google and Slack once so the backend can fetch user-specific context with the stored encrypted tokens.",
+                },
+                {
+                  icon: Shield,
+                  title: "Protect",
+                  body: "Fetched content still passes through the same redaction, encryption, and archive path as manual ingestion.",
+                },
+                {
+                  icon: Sparkles,
+                  title: "Surface",
+                  body: "Emails, channel messages, and upcoming meetings appear in the feed and power the Guide without copying content by hand.",
+                },
+              ].map(({ icon: Icon, title, body }) => (
+                <div
+                  key={title}
+                  className="rounded-[24px] border border-white/10 bg-black/30 p-4"
+                >
+                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05]">
+                    <Icon className="h-4 w-4 text-zinc-100" />
                   </div>
-                  <div className="space-y-2">
-                    <label className="mono-label">Subject</label>
-                    <Input
-                      type="text"
-                      value={emailSubject}
-                      onChange={(e) => setEmailSubject(e.target.value)}
-                      placeholder="Re: Q2 roadmap review"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="mono-label">Body</label>
-                    <Textarea
-                      value={emailBody}
-                      onChange={(e) => setEmailBody(e.target.value)}
-                      placeholder="Paste the email body here..."
-                      required
-                      rows={8}
-                    />
-                  </div>
-                  <SubmitButton loading={loading} label="Ingest Email" />
-                </form>
-              ) : (
-                <form onSubmit={submitSlack} className="space-y-5">
-                  <div className="space-y-2">
-                    <label className="mono-label">Channel</label>
-                    <Input
-                      type="text"
-                      value={slackChannel}
-                      onChange={(e) => setSlackChannel(e.target.value)}
-                      placeholder="engineering"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="mono-label">Message</label>
-                    <Textarea
-                      value={slackMessage}
-                      onChange={(e) => setSlackMessage(e.target.value)}
-                      placeholder="Paste the Slack message here..."
-                      required
-                      rows={8}
-                    />
-                  </div>
-                  <SubmitButton loading={loading} label="Ingest Message" />
-                </form>
-              )}
+                  <p className="mono-label mb-2">{title}</p>
+                  <p className="text-sm leading-7 text-zinc-400">{body}</p>
+                </div>
+              ))}
             </CardContent>
           </Card>
         </motion.div>
-
-        {success ? (
-          <Card className="border-white/15">
-            <CardContent className="pt-6 text-sm text-zinc-300">{success}</CardContent>
-          </Card>
-        ) : null}
-        {error ? (
-          <Card className="border-white/15">
-            <CardContent className="pt-6 text-sm text-zinc-400">{error}</CardContent>
-          </Card>
-        ) : null}
-      </motion.div>
-
-      <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}>
-        <Card className="h-full">
-          <CardHeader>
-            <Badge variant="secondary" className="w-fit">
-              Processing Path
-            </Badge>
-            <CardTitle className="text-2xl">
-              Everything stays monochrome and traceable.
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {[
-              {
-                icon: Inbox,
-                title: "Capture",
-                body: "Paste raw context from email or Slack with minimal formatting overhead.",
-              },
-              {
-                icon: Shield,
-                title: "Protect",
-                body: "PII is redacted and encrypted before the original content is archived.",
-              },
-              {
-                icon: Sparkles,
-                title: "Surface",
-                body: "Relevant context is embedded and pushed into the feed for quick review.",
-              },
-            ].map(({ icon: Icon, title, body }) => (
-              <div
-                key={title}
-                className="rounded-[24px] border border-white/10 bg-black/30 p-4"
-              >
-                <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05]">
-                  <Icon className="h-4 w-4 text-zinc-100" />
-                </div>
-                <p className="mono-label mb-2">{title}</p>
-                <p className="text-sm leading-7 text-zinc-400">{body}</p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </motion.div>
+      </div>
     </div>
+  );
+}
+
+function IntegrationCard({
+  title,
+  description,
+  icon: Icon,
+  connected,
+  loading,
+  lastSyncedAt,
+  subtitle,
+  onConnect,
+  onSync,
+  onDisconnect,
+}: {
+  title: string;
+  description: string;
+  icon: typeof Mail;
+  connected: boolean;
+  loading: boolean;
+  lastSyncedAt: string | null;
+  subtitle?: string;
+  onConnect: () => void;
+  onSync: () => void;
+  onDisconnect: () => void;
+}) {
+  return (
+    <Card className="transition-transform duration-200 hover:-translate-y-0.5">
+      <CardContent className="flex h-full flex-col justify-between gap-8 pt-6">
+        <div className="space-y-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06]">
+            <Icon className="h-5 w-5 text-zinc-100" />
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-semibold text-white">{title}</h2>
+              <Badge variant={connected ? "default" : "secondary"}>
+                {connected ? "Connected" : "Not connected"}
+              </Badge>
+            </div>
+            <p className="text-sm leading-7 text-zinc-400">{description}</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+              {connected
+                ? `Last synced ${lastSyncedAt ? new Date(lastSyncedAt).toLocaleString() : "never"}`
+                : subtitle || "Connect to enable syncing"}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {!connected ? (
+            <Button onClick={onConnect} disabled={loading}>
+              {loading ? "Opening..." : "Connect"}
+            </Button>
+          ) : (
+            <>
+              <Button onClick={onSync} disabled={loading}>
+                {loading ? "Syncing..." : "Sync Now"}
+              </Button>
+              <Button variant="secondary" onClick={onDisconnect} disabled={loading}>
+                <Unplug className="h-4 w-4" />
+                Disconnect
+              </Button>
+            </>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

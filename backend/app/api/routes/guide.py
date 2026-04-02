@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
+from app.security import resolve_user
 from app.schemas.events import FounderEvent, FounderEventMetadata, FounderEventPayload, TaskType, Source
 
 router = APIRouter(prefix="/api/guide", tags=["guide"])
@@ -10,24 +11,20 @@ router = APIRouter(prefix="/api/guide", tags=["guide"])
 
 class GuideRequest(BaseModel):
     question: str
-    user_id: str
+    user_id: str | None = None
 
 
 @router.post("")
-async def ask_guide(body: GuideRequest):
+async def ask_guide(body: GuideRequest, request: Request):
     """Enqueue a GUIDE_QUERY task and return the task_id."""
     from app.workers.celery_app import celery_app
 
+    user = await resolve_user(request, user_id=body.user_id)
     trace_id = str(uuid.uuid4())
-    # Accept any string user_id; generate a deterministic UUID if not valid
-    try:
-        user_uuid = uuid.UUID(body.user_id)
-    except ValueError:
-        user_uuid = uuid.uuid4()  # generate fresh v4 for non-UUID user_ids
 
     event = FounderEvent(
         metadata=FounderEventMetadata(
-            user_id=user_uuid,
+            user_id=user.id,
             trace_id=trace_id,
             timestamp=datetime.now(timezone.utc),
         ),

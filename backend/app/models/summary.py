@@ -17,6 +17,7 @@ class Summary(Base):
     )
     type: Mapped[str] = mapped_column(String(50), nullable=False)  # ASSISTANT_PREP | GUIDE_QUERY
     topic: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    source_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
     summary_text: Mapped[str] = mapped_column(Text, nullable=False)
     generated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -28,6 +29,7 @@ class Summary(Base):
             "user_id": str(self.user_id),
             "type": self.type,
             "topic": self.topic,
+            "source_ref": self.source_ref,
             "summary_text": self.summary_text,
             "generated_at": self.generated_at.isoformat(),
         }

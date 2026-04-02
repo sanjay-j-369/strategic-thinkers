@@ -22,9 +22,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
-const DEMO_USER_ID = "d4c615b8-cedc-4c97-80ed-2c8373610d78";
+import { apiFetch } from "@/lib/api";
+import { useRequireAuth } from "@/lib/use-require-auth";
 
 interface ArchiveItem {
   id: string;
@@ -34,6 +33,7 @@ interface ArchiveItem {
 }
 
 export default function PrivacyPage() {
+  const { ready, token } = useRequireAuth();
   const [items, setItems] = useState<ArchiveItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -48,14 +48,15 @@ export default function PrivacyPage() {
   const PAGE_SIZE = 20;
 
   const fetchItems = useCallback(async () => {
+    if (!token) return;
     setLoading(true);
     try {
-      const res = await fetch(
-        `${API_URL}/api/archive?user_id=${DEMO_USER_ID}&limit=${PAGE_SIZE}&offset=${
-          page * PAGE_SIZE
-        }`
+      const data = await apiFetch<{ items: ArchiveItem[]; total: number }>(
+        `/api/archive?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`,
+        {
+          token,
+        }
       );
-      const data = await res.json();
       setItems(data.items || []);
       setTotal(data.total || 0);
     } catch {
@@ -64,13 +65,16 @@ export default function PrivacyPage() {
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, token]);
 
   useEffect(() => {
-    fetchItems();
-  }, [fetchItems]);
+    if (ready) {
+      void fetchItems();
+    }
+  }, [fetchItems, ready]);
 
   async function handleView(item: ArchiveItem) {
+    if (!token) return;
     setNotice(null);
     setViewItem(item);
     setViewContent("");
@@ -78,8 +82,9 @@ export default function PrivacyPage() {
     setViewLoading(true);
 
     try {
-      const res = await fetch(`${API_URL}/api/archive/${item.id}?user_id=${DEMO_USER_ID}`);
-      const data = await res.json();
+      const data = await apiFetch<{ content?: string }>(`/api/archive/${item.id}`, {
+        token,
+      });
       setViewContent(data.content || "No content available");
     } catch {
       setViewContent("Unable to load decrypted content.");
@@ -89,12 +94,13 @@ export default function PrivacyPage() {
   }
 
   async function handleDelete() {
-    if (!deleteTarget) return;
+    if (!deleteTarget || !token) return;
 
     setDeleting(true);
     try {
-      await fetch(`${API_URL}/api/archive/${deleteTarget.id}?user_id=${DEMO_USER_ID}`, {
+      await apiFetch(`/api/archive/${deleteTarget.id}`, {
         method: "DELETE",
+        token,
       });
       setNotice("Archive item deleted.");
       setDeleteTarget(null);
@@ -104,7 +110,17 @@ export default function PrivacyPage() {
     }
   }
 
-  const hasNextPage = items.length === PAGE_SIZE;
+  const hasNextPage = page + 1 < Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  if (!ready) {
+    return (
+      <Card>
+        <CardContent className="py-20 text-center text-sm text-zinc-500">
+          Loading privacy center...
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <>
@@ -180,10 +196,7 @@ export default function PrivacyPage() {
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm text-zinc-500">
-                Page {page + 1}{" "}
-                {total
-                  ? `of roughly ${Math.max(1, Math.ceil(total / PAGE_SIZE))}`
-                  : ""}
+                Page {page + 1} of {Math.max(1, Math.ceil(total / PAGE_SIZE))}
               </div>
               <div className="flex gap-2">
                 <Button

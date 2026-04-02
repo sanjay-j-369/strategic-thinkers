@@ -1,17 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   CalendarDays,
   Inbox,
   LayoutDashboard,
+  LogOut,
   Shield,
   Sparkles,
   SquareStack,
 } from "lucide-react";
 
+import { useAuth } from "@/components/providers/auth-provider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +27,10 @@ const navigation = [
 
 export function SiteHeader() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, loading, isAuthenticated, signOut } = useAuth();
+
+  const isAuthPage = pathname === "/sign-in" || pathname === "/sign-up";
 
   return (
     <header className="sticky top-4 z-50 mb-8">
@@ -46,7 +52,7 @@ export function SiteHeader() {
 
           <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] font-mono uppercase tracking-[0.24em] text-zinc-500 lg:flex">
             <span className="h-2 w-2 rounded-full bg-white/70" />
-            Live context stream
+            {isAuthenticated ? "Live context stream" : "Private workspace"}
           </div>
         </div>
 
@@ -78,12 +84,42 @@ export function SiteHeader() {
             })}
           </nav>
 
-          <Button asChild size="sm" variant="secondary" className="self-start lg:self-auto">
-            <Link href="/guide">
-              Open Guide
-              <Sparkles className="h-4 w-4" />
-            </Link>
-          </Button>
+          {loading ? (
+            <div className="h-10 w-[180px] rounded-full border border-white/10 bg-white/[0.04]" />
+          ) : isAuthenticated && user ? (
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+              <div className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2">
+                <div className="text-sm font-medium text-white">
+                  {user.full_name || user.email}
+                </div>
+                <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                  {user.email}
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  signOut();
+                  router.push("/sign-in");
+                }}
+              >
+                <LogOut className="h-4 w-4" />
+                Sign Out
+              </Button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              {!isAuthPage ? (
+                <Button asChild size="sm" variant="secondary">
+                  <Link href="/sign-in">Sign In</Link>
+                </Button>
+              ) : null}
+              <Button asChild size="sm">
+                <Link href="/sign-up">Sign Up</Link>
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </header>

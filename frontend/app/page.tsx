@@ -11,6 +11,7 @@ import {
   Waves,
 } from "lucide-react";
 
+import { useAuth } from "@/components/providers/auth-provider";
 import { GuideCard } from "@/components/GuideCard";
 import { PrepCard } from "@/components/PrepCard";
 import { Badge } from "@/components/ui/badge";
@@ -24,9 +25,6 @@ import {
 } from "@/components/ui/card";
 import { useFounderFeed } from "@/lib/websocket";
 
-const DEMO_USER_ID =
-  process.env.NEXT_PUBLIC_DEMO_USER_ID || "d4c615b8-cedc-4c97-80ed-2c8373610d78";
-
 const fadeTransition = (delay: number) => ({
   duration: 0.35,
   delay,
@@ -34,36 +32,35 @@ const fadeTransition = (delay: number) => ({
 });
 
 export default function FeedPage() {
-  const cards = useFounderFeed(DEMO_USER_ID);
+  const { user, isAuthenticated, loading } = useAuth();
+  const cards = useFounderFeed(user?.id ?? "");
   const prepCount = cards.filter((card) => card.type === "ASSISTANT_PREP").length;
   const insightCount = cards.filter((card) => card.type === "GUIDE_QUERY").length;
 
   const metrics = [
     {
       label: "Cards Received",
-      value: cards.length,
+      value: isAuthenticated ? cards.length : "Private",
       icon: Activity,
-      note: "Live websocket stream",
+      note: isAuthenticated ? "Live websocket stream" : "Available after sign in",
     },
     {
       label: "Meeting Preps",
-      value: prepCount,
+      value: isAuthenticated ? prepCount : "Synced",
       icon: CalendarDays,
-      note: "Upcoming conversations",
+      note: isAuthenticated ? "Upcoming conversations" : "Google Calendar ready",
     },
     {
       label: "Strategic Notes",
-      value: insightCount,
+      value: isAuthenticated ? insightCount : "Context",
       icon: Sparkles,
-      note: "Guide decisions captured",
+      note: isAuthenticated ? "Guide decisions captured" : "Slack and Gmail inputs",
     },
   ];
 
   return (
     <div className="space-y-8">
-      <motion.section
-        className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_360px]"
-      >
+      <motion.section className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_360px]">
         <motion.div
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
@@ -71,28 +68,47 @@ export default function FeedPage() {
         >
           <Card className="h-full overflow-hidden">
             <CardHeader className="gap-5 pb-8">
-              <Badge className="w-fit">Live Intelligence Feed</Badge>
+              <Badge className="w-fit">
+                {isAuthenticated ? "Live Intelligence Feed" : "Founder Workspace"}
+              </Badge>
               <div className="space-y-4">
                 <CardTitle className="max-w-3xl text-4xl md:text-5xl">
-                  Minimal founder operations, tuned for fast decisions.
+                  Founder operations, tuned for fast decisions.
                 </CardTitle>
                 <CardDescription className="max-w-2xl text-base text-zinc-400 text-balance">
-                  Real-time briefings from Gmail, Slack, and calendar context,
-                  surfaced in a monochrome workspace built for high-signal review.
+                  {isAuthenticated
+                    ? "Real-time briefings from Gmail, Slack, and calendar context, surfaced in a monochrome workspace built for high-signal review."
+                    : "Create an account, connect Google Calendar and Slack, and turn the app into a private operator console instead of a manual entry form."}
                 </CardDescription>
               </div>
             </CardHeader>
             <CardContent className="flex flex-col gap-6 border-t border-white/10 pt-6 md:flex-row md:items-center md:justify-between">
               <div className="flex flex-wrap gap-3">
-                <Button asChild size="lg">
-                  <Link href="/ingest">
-                    Add Source Material
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-                <Button asChild size="lg" variant="secondary">
-                  <Link href="/guide">Ask the Guide</Link>
-                </Button>
+                {isAuthenticated ? (
+                  <>
+                    <Button asChild size="lg">
+                      <Link href="/ingest">
+                        Connect Sources
+                        <ArrowRight className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                    <Button asChild size="lg" variant="secondary">
+                      <Link href="/guide">Ask the Guide</Link>
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button asChild size="lg">
+                      <Link href="/sign-up">
+                        Create Account
+                        <ArrowRight className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                    <Button asChild size="lg" variant="secondary">
+                      <Link href="/sign-in">Sign In</Link>
+                    </Button>
+                  </>
+                )}
               </div>
 
               <div className="grid gap-3 text-sm text-zinc-400 sm:grid-cols-3 md:text-right">
@@ -106,7 +122,9 @@ export default function FeedPage() {
                 </div>
                 <div>
                   <p className="mono-label mb-1">Mode</p>
-                  <p className="text-zinc-100">Operator View</p>
+                  <p className="text-zinc-100">
+                    {isAuthenticated ? "Operator View" : "Authentication Ready"}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -123,9 +141,15 @@ export default function FeedPage() {
               <Badge variant="secondary" className="w-fit">
                 System Readiness
               </Badge>
-              <CardTitle className="text-2xl">Focused, live, and quiet by default.</CardTitle>
+              <CardTitle className="text-2xl">
+                {isAuthenticated
+                  ? "Focused, live, and quiet by default."
+                  : "Auth, sync, and private memory are wired in."}
+              </CardTitle>
               <CardDescription>
-                Signals only surface when they matter. Everything else stays in the archive.
+                {isAuthenticated
+                  ? "Signals only surface when they matter. Everything else stays in the archive."
+                  : "Sign in, connect providers, then sync Gmail, Google Calendar, and Slack into the feed without manual copy and paste."}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -133,17 +157,23 @@ export default function FeedPage() {
                 {
                   icon: Inbox,
                   label: "Ingestion",
-                  value: "Manual or connected inputs",
+                  value: isAuthenticated
+                    ? "Manual fallback plus connected sync"
+                    : "Google and Slack connect flow",
                 },
                 {
                   icon: Sparkles,
                   label: "Guide",
-                  value: "Context-aware strategy replies",
+                  value: isAuthenticated
+                    ? "Context-aware strategy replies"
+                    : "Protected after sign in",
                 },
                 {
                   icon: Waves,
                   label: "Feed",
-                  value: "Streaming updates over websocket",
+                  value: isAuthenticated
+                    ? "Streaming updates over websocket"
+                    : "User-specific websocket stream",
                 },
               ].map(({ icon: Icon, label, value }) => (
                 <div
@@ -164,9 +194,7 @@ export default function FeedPage() {
         </motion.div>
       </motion.section>
 
-      <motion.section
-        className="grid gap-4 md:grid-cols-3"
-      >
+      <motion.section className="grid gap-4 md:grid-cols-3">
         {metrics.map(({ label, value, icon: Icon, note }, index) => (
           <motion.div
             key={label}
@@ -198,10 +226,43 @@ export default function FeedPage() {
             <p className="mono-label mb-2">Recent Signals</p>
             <h2 className="text-2xl font-semibold text-white">Operational feed</h2>
           </div>
-          <Badge variant="secondary">Newest items stay on top</Badge>
+          <Badge variant="secondary">
+            {isAuthenticated ? "Newest items stay on top" : "Sign in to unlock"}
+          </Badge>
         </div>
 
-        {cards.length === 0 ? (
+        {loading ? (
+          <Card>
+            <CardContent className="py-20 text-center text-sm text-zinc-500">
+              Loading workspace...
+            </CardContent>
+          </Card>
+        ) : !isAuthenticated ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center gap-4 py-20 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-3xl border border-white/10 bg-white/[0.05]">
+                <Activity className="h-6 w-6 text-zinc-100" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-semibold text-white">
+                  Sign in to start your private feed
+                </h3>
+                <p className="max-w-xl text-sm leading-7 text-zinc-500">
+                  Create an account, connect Google Calendar and Slack on the ingest page,
+                  and the feed will start filling with synced context.
+                </p>
+              </div>
+              <div className="flex flex-wrap justify-center gap-3">
+                <Button asChild>
+                  <Link href="/sign-up">Create Account</Link>
+                </Button>
+                <Button asChild variant="secondary">
+                  <Link href="/sign-in">Sign In</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : cards.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center gap-4 py-20 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-3xl border border-white/10 bg-white/[0.05]">
@@ -212,7 +273,7 @@ export default function FeedPage() {
                   Waiting for the first signal
                 </h3>
                 <p className="max-w-xl text-sm leading-7 text-zinc-500">
-                  Add an email, Slack message, or meeting and the processed cards will land here.
+                  Connect Google or Slack, or use manual ingestion as fallback, and the processed cards will land here.
                 </p>
               </div>
               <div className="flex flex-wrap justify-center gap-3">

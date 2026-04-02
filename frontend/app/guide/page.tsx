@@ -15,9 +15,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { apiFetch } from "@/lib/api";
+import { useRequireAuth } from "@/lib/use-require-auth";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
-const DEMO_USER_ID = "d4c615b8-cedc-4c97-80ed-2c8373610d78";
 const MOCK_KEY = "7C9_xH7n-2TfA8XmK_j_yWkXN2q48R_bZ0J8m4lR5G8=";
 
 const STARTERS = [
@@ -33,6 +33,7 @@ interface Message {
 }
 
 export default function ChatPage() {
+  const { ready, token } = useRequireAuth();
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -50,7 +51,7 @@ export default function ChatPage() {
 
   async function send(text?: string) {
     const message = text || input.trim();
-    if (!message || loading) return;
+    if (!message || loading || !token) return;
 
     const userMessage: Message = { role: "user", content: message };
     const nextMessages = [...messages, userMessage];
@@ -59,23 +60,24 @@ export default function ChatPage() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_URL}/api/chat`, {
+      const data = await apiFetch<{
+        reply: string;
+        pii_mapping?: Record<string, string>;
+      }>("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: DEMO_USER_ID,
+        token,
+        json: {
           message,
           history: nextMessages
             .slice(-10)
             .map((entry) => ({ role: entry.role, content: entry.content })),
-        }),
+        },
       });
-      const data = await res.json();
 
       let finalReply = data.reply;
       if (data.pii_mapping && Object.keys(data.pii_mapping).length > 0) {
         const secret = new fernet.Secret(MOCK_KEY);
-        Object.entries(data.pii_mapping).forEach(([token, encryptedValue]) => {
+        Object.entries(data.pii_mapping).forEach(([piiToken, encryptedValue]) => {
           try {
             const tokenInstance = new fernet.Token({
               secret,
@@ -83,9 +85,9 @@ export default function ChatPage() {
               ttl: 0,
             });
             const plaintext = tokenInstance.decode();
-            finalReply = finalReply.replaceAll(token, plaintext);
+            finalReply = finalReply.replaceAll(piiToken, plaintext);
           } catch (err) {
-            console.error("Failed to decrypt token:", token, err);
+            console.error("Failed to decrypt token:", piiToken, err);
           }
         });
       }
@@ -102,6 +104,16 @@ export default function ChatPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (!ready) {
+    return (
+      <Card>
+        <CardContent className="py-20 text-center text-sm text-zinc-500">
+          Loading guide workspace...
+        </CardContent>
+      </Card>
+    );
   }
 
   return (

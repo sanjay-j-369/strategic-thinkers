@@ -19,6 +19,27 @@ async def lifespan(app: FastAPI):
     engine = create_async_engine(settings.DATABASE_URL, echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.exec_driver_sql(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(255)"
+        )
+        await conn.exec_driver_sql(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT"
+        )
+        await conn.exec_driver_sql(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS slack_team_id VARCHAR(255)"
+        )
+        await conn.exec_driver_sql(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS slack_channel_ids TEXT"
+        )
+        await conn.exec_driver_sql(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS google_last_synced_at TIMESTAMP WITH TIME ZONE"
+        )
+        await conn.exec_driver_sql(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS slack_last_synced_at TIMESTAMP WITH TIME ZONE"
+        )
+        await conn.exec_driver_sql(
+            "ALTER TABLE summaries ADD COLUMN IF NOT EXISTS source_ref VARCHAR(255)"
+        )
     app.state.async_session = async_sessionmaker(engine, expire_on_commit=False)
 
     # Redis pub/sub listener

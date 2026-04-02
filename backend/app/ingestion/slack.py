@@ -16,6 +16,26 @@ class SlackWorker:
     def authenticate(self, token: str):
         self.client = WebClient(token=token)
 
+    def list_channels(self, limit: int = 100):
+        if not self.client:
+            raise RuntimeError("SlackWorker not authenticated.")
+
+        response = self.client.conversations_list(
+            types="public_channel,private_channel",
+            exclude_archived=True,
+            limit=limit,
+        )
+        channels = []
+        for channel in response.get("channels", []):
+            channels.append(
+                {
+                    "id": channel.get("id"),
+                    "name": channel.get("name"),
+                    "is_private": channel.get("is_private", False),
+                }
+            )
+        return channels
+
     def handle_webhook(self, payload: dict, user_id: str):
         """Handle incoming Slack webhook event and enqueue DATA_INGESTION."""
         from app.workers.celery_app import celery_app
@@ -55,7 +75,13 @@ class SlackWorker:
         )
         return founder_event
 
-    def poll_channels(self, user_id: str, channel_ids: list[str], limit: int = 10):
+    def poll_channels(
+        self,
+        user_id: str,
+        channel_ids: list[str],
+        limit: int = 10,
+        oldest: float | None = None,
+    ):
         """Poll recent messages from specified channels."""
         from app.workers.celery_app import celery_app
 
@@ -65,7 +91,10 @@ class SlackWorker:
         events = []
         for channel_id in channel_ids:
             try:
-                result = self.client.conversations_history(channel=channel_id, limit=limit)
+                request_kwargs = {"channel": channel_id, "limit": limit}
+                if oldest is not None:
+                    request_kwargs["oldest"] = str(oldest)
+                result = self.client.conversations_history(**request_kwargs)
                 for msg in result.get("messages", []):
                     text = msg.get("text", "")
                     if not text:

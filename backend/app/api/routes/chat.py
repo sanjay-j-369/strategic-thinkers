@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 import os
 from dotenv import load_dotenv
@@ -6,21 +6,23 @@ from pathlib import Path
 load_dotenv(Path(__file__).resolve().parents[4] / ".env")
 
 from groq import Groq
+from app.security import resolve_user
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
 class ChatRequest(BaseModel):
-    user_id: str
+    user_id: str | None = None
     message: str
     history: list[dict] = []
 
 
 @router.post("")
-def chat(body: ChatRequest):
+async def chat(body: ChatRequest, request: Request):
+    user = await resolve_user(request, user_id=body.user_id)
     client = Groq(api_key=os.environ.get("GROQ_API_KEY", ""))
 
-    context = _get_context(body.user_id, body.message)
+    context = _get_context(str(user.id), body.message)
 
     system_prompt = f"""You are a strategic AI advisor for founders.
 You have direct access to the founder's recent emails and Slack messages shown below.
@@ -63,11 +65,11 @@ Be direct and specific. Reference actual content and tokens from the messages ab
             with Session(engine) as session:
                 for token in tokens:
                     item = session.execute(
-                        select(PiiVault).where(PiiVault.token == token, PiiVault.user_id == uuid.UUID(body.user_id))
+                        select(PiiVault).where(PiiVault.token == token, PiiVault.user_id == user.id)
                     ).scalar_one_or_none()
                     if item:
                         try:
-                            plaintext = decrypt(body.user_id, item.encrypted_value)
+                            plaintext = decrypt(str(user.id), item.encrypted_value)
                             from cryptography.fernet import Fernet
                             # random key for symmetric encryption to frontend
                             mock_key = b'7C9_xH7n-2TfA8XmK_j_yWkXN2q48R_bZ0J8m4lR5G8='

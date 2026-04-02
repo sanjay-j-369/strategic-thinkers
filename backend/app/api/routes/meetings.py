@@ -5,21 +5,16 @@ from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy import select
 
+from app.security import resolve_user
+
 router = APIRouter(prefix="/api/meetings", tags=["meetings"])
 
 
 class MeetingRequest(BaseModel):
-    user_id: str
+    user_id: str | None = None
     topic: str
     attendees: list[str] = []
     scheduled_at: Optional[str] = None
-
-
-def _safe_uuid(user_id: str) -> uuid.UUID:
-    try:
-        return uuid.UUID(user_id)
-    except ValueError:
-        return uuid.uuid4()
 
 
 @router.post("")
@@ -30,14 +25,14 @@ async def schedule_meeting(body: MeetingRequest, request: Request):
     )
     from app.workers.celery_app import celery_app
 
-    user_uuid = _safe_uuid(body.user_id)
+    user = await resolve_user(request, user_id=body.user_id)
     scheduled_at = body.scheduled_at or datetime.now(timezone.utc).isoformat()
 
     # Save as a summary record so it shows in meetings list
     async_session = request.app.state.async_session
     async with async_session() as session:
         meeting = Summary(
-            user_id=user_uuid,
+            user_id=user.id,
             type="MEETING",
             topic=body.topic,
             summary_text=f"Attendees: {', '.join(body.attendees)}\nScheduled: {scheduled_at}",
@@ -50,7 +45,7 @@ async def schedule_meeting(body: MeetingRequest, request: Request):
     # Trigger AI prep card via Celery
     event = FounderEvent(
         metadata=FounderEventMetadata(
-            user_id=user_uuid,
+            user_id=user.id,
             trace_id=str(uuid.uuid4()),
             timestamp=datetime.now(timezone.utc),
         ),
@@ -72,16 +67,17 @@ async def schedule_meeting(body: MeetingRequest, request: Request):
 @router.get("")
 async def list_meetings(
     request: Request,
-    user_id: str = Query(...),
+    user_id: str | None = Query(None),
     limit: int = Query(20),
 ):
     from app.models.summary import Summary
+    user = await resolve_user(request, user_id=user_id)
 
     async_session = request.app.state.async_session
     async with async_session() as session:
         result = await session.execute(
             select(Summary)
-            .where(Summary.user_id == _safe_uuid(user_id), Summary.type == "MEETING")
+            .where(Summary.user_id == user.id, Summary.type == "MEETING")
             .order_by(Summary.generated_at.desc())
             .limit(limit)
         )
@@ -105,6 +101,7 @@ async def list_meetings(
             "topic": r.topic or "",
             "attendees": attendees,
             "scheduled_at": scheduled_at,
+            "summary": r.summary_text,
             "status": "upcoming",
         })
 

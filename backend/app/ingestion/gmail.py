@@ -26,17 +26,23 @@ class GmailWorker:
         )
         self.service = build("gmail", "v1", credentials=creds)
 
-    def poll(self, user_id: str, max_results: int = 10):
+    def poll(
+        self,
+        user_id: str,
+        max_results: int = 10,
+        after: datetime | None = None,
+    ):
         """Poll recent Gmail messages and enqueue DATA_INGESTION events."""
         from app.workers.celery_app import celery_app
 
         if not self.service:
             raise RuntimeError("GmailWorker not authenticated. Call authenticate() first.")
 
+        query = f"after:{int(after.timestamp())}" if after else "newer_than:7d"
         messages = (
             self.service.users()
             .messages()
-            .list(userId="me", maxResults=max_results, q="newer_than:1d")
+            .list(userId="me", maxResults=max_results * 2, q=query)
             .execute()
             .get("messages", [])
         )
@@ -49,6 +55,14 @@ class GmailWorker:
                 .get(userId="me", id=msg_ref["id"], format="full")
                 .execute()
             )
+            internal_date_raw = msg.get("internalDate")
+            if internal_date_raw:
+                internal_date = datetime.fromtimestamp(
+                    int(internal_date_raw) / 1000,
+                    tz=timezone.utc,
+                )
+                if after and internal_date <= after:
+                    continue
 
             headers = {h["name"]: h["value"] for h in msg.get("payload", {}).get("headers", [])}
             subject = headers.get("Subject", "")
