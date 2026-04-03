@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import fernet from "fernet";
 import { AnimatePresence, motion } from "framer-motion";
 import { Bot, LoaderCircle, Send, Sparkles, UserCircle2 } from "lucide-react";
 
@@ -17,8 +16,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/api";
 import { useRequireAuth } from "@/lib/use-require-auth";
-
-const MOCK_KEY = "7C9_xH7n-2TfA8XmK_j_yWkXN2q48R_bZ0J8m4lR5G8=";
 
 const STARTERS = [
   "Should I hire a CTO now or keep outsourcing?",
@@ -60,10 +57,7 @@ export default function ChatPage() {
     setLoading(true);
 
     try {
-      const data = await apiFetch<{
-        reply: string;
-        pii_mapping?: Record<string, string>;
-      }>("/api/chat", {
+      const data = await apiFetch<{ reply: string }>("/api/chat", {
         method: "POST",
         token,
         json: {
@@ -73,26 +67,7 @@ export default function ChatPage() {
             .map((entry) => ({ role: entry.role, content: entry.content })),
         },
       });
-
-      let finalReply = data.reply;
-      if (data.pii_mapping && Object.keys(data.pii_mapping).length > 0) {
-        const secret = new fernet.Secret(MOCK_KEY);
-        Object.entries(data.pii_mapping).forEach(([piiToken, encryptedValue]) => {
-          try {
-            const tokenInstance = new fernet.Token({
-              secret,
-              token: String(encryptedValue),
-              ttl: 0,
-            });
-            const plaintext = tokenInstance.decode();
-            finalReply = finalReply.replaceAll(piiToken, plaintext);
-          } catch (err) {
-            console.error("Failed to decrypt token:", piiToken, err);
-          }
-        });
-      }
-
-      setMessages((prev) => [...prev, { role: "assistant", content: finalReply }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
     } catch {
       setMessages((prev) => [
         ...prev,

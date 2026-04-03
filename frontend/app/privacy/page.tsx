@@ -35,8 +35,8 @@ interface ArchiveItem {
 interface ArchiveViewResponse {
   content?: string;
   content_redacted?: string;
-  content_raw?: string;
-  pii_mapping?: Record<string, string>;
+  pii_tokens?: string[];
+  pii_mapping_enc?: Record<string, string>;
 }
 
 export default function PrivacyPage() {
@@ -49,9 +49,8 @@ export default function PrivacyPage() {
   const [viewOpen, setViewOpen] = useState(false);
   const [viewLoading, setViewLoading] = useState(false);
   const [viewContent, setViewContent] = useState("");
-  const [viewRawContent, setViewRawContent] = useState("");
-  const [showRaw, setShowRaw] = useState(false);
-  const [piiMapping, setPiiMapping] = useState<Record<string, string>>({});
+  const [piiTokens, setPiiTokens] = useState<string[]>([]);
+  const [piiMappingEnc, setPiiMappingEnc] = useState<Record<string, string>>({});
   const [viewItem, setViewItem] = useState<ArchiveItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ArchiveItem | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -88,21 +87,20 @@ export default function PrivacyPage() {
     setNotice(null);
     setViewItem(item);
     setViewContent("");
-    setViewRawContent("");
-    setPiiMapping({});
-    setShowRaw(false);
+    setPiiTokens([]);
+    setPiiMappingEnc({});
     setViewOpen(true);
     setViewLoading(true);
 
     try {
-      const data = await apiFetch<ArchiveViewResponse>(`/api/archive/${item.id}?include_raw=true`, {
+      const data = await apiFetch<ArchiveViewResponse>(`/api/archive/${item.id}`, {
         token,
       });
       setViewContent(data.content_redacted || data.content || "No content available");
-      setViewRawContent(data.content_raw || "");
-      setPiiMapping(data.pii_mapping || {});
+      setPiiTokens(data.pii_tokens || []);
+      setPiiMappingEnc(data.pii_mapping_enc || {});
     } catch {
-      setViewContent("Unable to load decrypted content.");
+      setViewContent("Unable to load archived content.");
     } finally {
       setViewLoading(false);
     }
@@ -152,7 +150,7 @@ export default function PrivacyPage() {
                 Inspect what the system kept.
               </CardTitle>
               <CardDescription className="max-w-2xl text-base">
-                Review archived entries, open the decrypted original when needed, and forget records permanently from the archive surface.
+                Review archived entries, inspect redacted content with token placeholders, and forget records permanently from the archive surface.
               </CardDescription>
             </CardHeader>
           </Card>
@@ -237,7 +235,7 @@ export default function PrivacyPage() {
       <Dialog open={viewOpen} onOpenChange={setViewOpen}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Decrypted archive entry</DialogTitle>
+            <DialogTitle>Redacted archive entry</DialogTitle>
             <DialogDescription>
               {viewItem
                 ? `${viewItem.source} • ${new Date(viewItem.ingested_at).toLocaleString()}`
@@ -246,39 +244,33 @@ export default function PrivacyPage() {
           </DialogHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">
-              {showRaw ? "Raw decrypted view" : "Redacted view (default)"}
+              Redacted view
             </p>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setShowRaw((prev) => !prev)}
-              disabled={viewLoading || !viewRawContent}
-            >
-              {showRaw ? "Show Redacted" : "Show Raw"}
-            </Button>
           </div>
           <div className="max-h-[60vh] overflow-y-auto rounded-[24px] border border-white/10 bg-black/40 p-4">
             {viewLoading ? (
               <div className="flex items-center gap-3 text-sm text-zinc-400">
                 <Shield className="h-4 w-4" />
-                Loading decrypted content...
+                Loading archived content...
               </div>
             ) : (
               <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-7 text-zinc-300">
-                {showRaw ? viewRawContent || viewContent : viewContent}
+                {viewContent}
               </pre>
             )}
           </div>
-          {Object.keys(piiMapping).length > 0 ? (
+          {piiTokens.length > 0 ? (
             <div className="rounded-[20px] border border-white/10 bg-black/30 p-4">
-              <p className="mono-label mb-3">PII Token Mapping</p>
+              <p className="mono-label mb-3">PII Tokens</p>
               <div className="space-y-2">
-                {Object.entries(piiMapping).map(([token, value]) => (
+                {piiTokens.map((token) => (
                   <div key={token} className="grid gap-2 md:grid-cols-[1fr_2fr]">
                     <code className="rounded bg-white/[0.06] px-2 py-1 text-xs text-zinc-300">
                       {token}
                     </code>
-                    <p className="text-sm text-zinc-300">{value}</p>
+                    <p className="truncate text-sm text-zinc-300">
+                      {piiMappingEnc[token] || "Encrypted value stored"}
+                    </p>
                   </div>
                 ))}
               </div>

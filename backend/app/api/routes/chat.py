@@ -47,45 +47,11 @@ Be direct and specific. Reference actual content and tokens from the messages ab
     )
 
     reply = response.choices[0].message.content
-    pii_mapping = {}
-
-    try:
-        import re
-        import uuid
-        from sqlalchemy import create_engine, select
-        from sqlalchemy.orm import Session
-        from app.models.pii_vault import PiiVault
-        from app.pipeline.encryption import decrypt
-
-        # Find tokens like <PHONE_NUMBER_8a2b>
-        tokens = set(re.findall(r"<[A-Z0-9_]+_[a-f0-9]+>", reply))
-        if tokens:
-            db_url = os.environ.get("DATABASE_URL", "").replace("+asyncpg", "")
-            engine = create_engine(db_url)
-            with Session(engine) as session:
-                for token in tokens:
-                    item = session.execute(
-                        select(PiiVault).where(PiiVault.token == token, PiiVault.user_id == user.id)
-                    ).scalar_one_or_none()
-                    if item:
-                        try:
-                            plaintext = decrypt(str(user.id), item.encrypted_value)
-                            from cryptography.fernet import Fernet
-                            # random key for symmetric encryption to frontend
-                            mock_key = b'7C9_xH7n-2TfA8XmK_j_yWkXN2q48R_bZ0J8m4lR5G8='
-                            f = Fernet(mock_key)
-                            encrypted_pii = f.encrypt(plaintext.encode('utf-8')).decode('utf-8')
-                            pii_mapping[token] = encrypted_pii
-                        except Exception:
-                            pass
-    except Exception as e:
-        print(f"PII decode error: {e}")
-
-    return {"reply": reply, "pii_mapping": pii_mapping}
+    return {"reply": reply}
 
 
 def _get_context(user_id: str, question: str) -> str:
-    """Pull context from Pinecone first, fallback to Postgres archive."""
+    """Pull context from Pinecone first, fallback to redacted Postgres archive."""
 
     # Try Pinecone semantic search first
     pinecone_results = _query_pinecone(user_id, question)
@@ -122,15 +88,12 @@ def _query_pinecone(user_id: str, question: str) -> str:
 
 
 def _query_postgres(user_id: str) -> str:
-    """Fallback: decrypt and return recent archive items from Postgres."""
+    """Fallback: return recent redacted archive items from Postgres."""
     try:
         import uuid
         from sqlalchemy import create_engine, select
         from sqlalchemy.orm import Session
-        from app.models.base import Base
-        from app.models.user import User
         from app.models.archive import Archive
-        from app.pipeline.encryption import decrypt
 
         db_url = os.environ.get("DATABASE_URL", "").replace("+asyncpg", "")
         engine = create_engine(db_url)
@@ -148,11 +111,9 @@ def _query_postgres(user_id: str) -> str:
 
         snippets = []
         for item in results:
-            try:
-                content = decrypt(user_id, item.content_enc)
+            content = (item.content_redacted or "").strip()
+            if content:
                 snippets.append(f"[{item.source}] {content[:500]}")
-            except Exception:
-                pass
 
         return "\n---\n".join(snippets) if snippets else "No content available."
     except Exception as e:

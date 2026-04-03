@@ -40,6 +40,12 @@ async def lifespan(app: FastAPI):
         await conn.exec_driver_sql(
             "ALTER TABLE summaries ADD COLUMN IF NOT EXISTS source_ref VARCHAR(255)"
         )
+        await conn.exec_driver_sql(
+            "ALTER TABLE archive ADD COLUMN IF NOT EXISTS content_redacted TEXT"
+        )
+        await conn.exec_driver_sql(
+            "ALTER TABLE archive ADD COLUMN IF NOT EXISTS pii_tokens JSONB"
+        )
     app.state.async_session = async_sessionmaker(engine, expire_on_commit=False)
 
     if settings.DEMO_MODE:

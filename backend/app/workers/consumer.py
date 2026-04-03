@@ -58,13 +58,21 @@ def _handle_data_ingestion(event: FounderEvent, user_id: str):
             "ingested_at": datetime.now(timezone.utc).isoformat(),
         },
     )
-    _save_archive(user_id, event.payload.source.value, content_enc, tags)
+    pii_tokens = sorted(list(pii_mapping.keys())) if pii_mapping else []
+    _save_archive(
+        user_id=user_id,
+        source=event.payload.source.value,
+        content_enc=content_enc,
+        content_redacted=content_redacted,
+        tags=tags,
+        pii_tokens=pii_tokens,
+    )
     
     if pii_mapping:
         _save_pii_mapping(user_id, pii_mapping)
 
     # LLM-powered meeting detection
-    meeting = detect_meeting(content_raw, event.payload.source.value)
+    meeting = detect_meeting(content_redacted, event.payload.source.value)
     if meeting:
         _save_meeting_from_detection(user_id, meeting)
         print(f"[Consumer] Meeting detected: {meeting.get('topic')}")
@@ -158,7 +166,14 @@ def _save_meeting_from_detection(user_id: str, meeting: dict):
         print(f"Meeting detection save error: {e}")
 
 
-def _save_archive(user_id: str, source: str, content_enc: str, tags: list):
+def _save_archive(
+    user_id: str,
+    source: str,
+    content_enc: str,
+    content_redacted: str,
+    tags: list,
+    pii_tokens: list[str],
+):
     from sqlalchemy import create_engine
     from sqlalchemy.orm import Session
     from app.models.base import Base
@@ -174,7 +189,9 @@ def _save_archive(user_id: str, source: str, content_enc: str, tags: list):
                 user_id=uuid.UUID(user_id),
                 source=source,
                 content_enc=content_enc,
+                content_redacted=content_redacted,
                 context_tags=tags,
+                pii_tokens=pii_tokens,
             ))
             session.commit()
     except Exception as e:

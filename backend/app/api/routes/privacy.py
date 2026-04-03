@@ -3,8 +3,7 @@ from fastapi import APIRouter, Request, Query, HTTPException
 from sqlalchemy import func, select
 
 from app.models.archive import Archive
-from app.pipeline.encryption import decrypt
-from app.pipeline.pii import strip_pii
+from app.models.pii_vault import PiiVault
 from app.security import resolve_user
 
 router = APIRouter(prefix="/api/archive", tags=["privacy"])
@@ -32,7 +31,20 @@ async def list_archive(
         total = await session.scalar(
             select(func.count()).select_from(Archive).where(Archive.user_id == user.id)
         )
-    return {"items": [item.to_dict() for item in items], "total": total or 0}
+    return {
+        "items": [
+            {
+                "id": str(item.id),
+                "user_id": str(item.user_id),
+                "source": item.source,
+                "context_tags": item.context_tags,
+                "pii_tokens": item.pii_tokens,
+                "ingested_at": item.ingested_at.isoformat(),
+            }
+            for item in items
+        ],
+        "total": total or 0,
+    }
 
 
 @router.get("/{item_id}")
@@ -40,9 +52,8 @@ async def get_archive_item(
     item_id: str,
     request: Request,
     user_id: str | None = Query(None),
-    include_raw: bool = Query(False),
 ):
-    """Return redacted content with token mapping; optionally include raw decrypted text."""
+    """Return stored redacted content with encrypted token mapping."""
     user = await resolve_user(request, user_id=user_id)
     async_session = request.app.state.async_session
     async with async_session() as session:
@@ -53,23 +64,18 @@ async def get_archive_item(
         if not item:
             raise HTTPException(status_code=404, detail="Archive item not found")
 
-        user_id_str = str(user.id)
-        plaintext = decrypt(user_id_str, item.content_enc)
-        redacted_content, pii_mapping_enc = strip_pii(plaintext, user_id_str)
-        pii_mapping = {}
-        for token, enc_value in pii_mapping_enc.items():
-            try:
-                pii_mapping[token] = decrypt(user_id_str, enc_value)
-            except Exception:
-                continue
-
         data = item.to_dict()
-        data["content"] = redacted_content
-        data["content_redacted"] = redacted_content
-        data["pii_mapping"] = pii_mapping
-        data["pii_tokens"] = sorted(list(pii_mapping.keys()))
-        if include_raw:
-            data["content_raw"] = plaintext
+        data["content"] = item.content_redacted or ""
+        data["content_redacted"] = item.content_redacted or ""
+
+        pii_tokens = item.pii_tokens or []
+        pii_rows = await session.execute(
+            select(PiiVault).where(PiiVault.user_id == user.id, PiiVault.token.in_(pii_tokens))
+        )
+        data["pii_tokens"] = sorted(pii_tokens)
+        data["pii_mapping_enc"] = {
+            row.token: row.encrypted_value for row in pii_rows.scalars().all()
+        }
     return data
 
 
