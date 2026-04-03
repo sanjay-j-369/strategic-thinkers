@@ -31,6 +31,9 @@ class FounderEventPayload(BaseModel):
     context_tags: list[str]
     entities: list[str] = []
     topic: Optional[str] = None
+    source_id: Optional[str] = None
+    source_url: Optional[str] = None
+    is_action_item: bool = False
 
 
 class FounderEvent(BaseModel):

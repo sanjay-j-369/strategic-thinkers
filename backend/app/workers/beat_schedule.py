@@ -8,6 +8,10 @@ CELERYBEAT_SCHEDULE = {
         "task": "poll_calendar_events" if _mode == "real" else "poll_calendar_simulated",
         "schedule": crontab(minute="*/15"),
     },
+    "evaluate-founder-thresholds": {
+        "task": "evaluate_founder_thresholds",
+        "schedule": crontab(minute=0, hour=6),
+    },
 }
 
 if _mode == "real":

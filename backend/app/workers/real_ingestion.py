@@ -164,6 +164,8 @@ def _detect_and_save_meetings(user_id: str, events):
                     context_tags=["meeting-prep", "email-detected"],
                     entities=entities,
                     topic=subject,
+                    source_id=source_ref,
+                    source_url=meet_link,
                 ),
             )
             celery_app.send_task(

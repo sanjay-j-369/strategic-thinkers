@@ -121,6 +121,8 @@ def sync_calendar_events_for_user(
                         context_tags=["meeting-prep", "calendar-sync"],
                         entities=attendees,
                         topic=event.get("summary", "Meeting"),
+                        source_id=event_id,
+                        source_url=event.get("htmlLink"),
                     ),
                 )
                 celery_app.send_task(

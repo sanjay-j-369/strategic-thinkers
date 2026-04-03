@@ -1,5 +1,25 @@
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+function resolvedApiUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (typeof window === "undefined") {
+    return configured || "/backend-api";
+  }
+
+  if (!configured) {
+    return "/backend-api";
+  }
+
+  const browserHost = window.location.hostname;
+  const isBrowserLocal = browserHost === "localhost" || browserHost === "127.0.0.1";
+  const configuredIsLocal =
+    configured.includes("localhost") || configured.includes("127.0.0.1");
+
+  // If app is opened on a non-local hostname/tunnel, avoid browser localhost calls.
+  if (!isBrowserLocal && configuredIsLocal) {
+    return "/backend-api";
+  }
+
+  return configured;
+}
 
 interface ApiFetchOptions extends RequestInit {
   json?: unknown;
@@ -12,6 +32,7 @@ export async function apiFetch<T = unknown>(
 ): Promise<T> {
   const { json, token, headers, ...rest } = options;
   const requestHeaders = new Headers(headers);
+  const apiBase = resolvedApiUrl();
 
   if (json !== undefined) {
     requestHeaders.set("Content-Type", "application/json");
@@ -20,7 +41,7 @@ export async function apiFetch<T = unknown>(
     requestHeaders.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetch(`${apiBase}${path}`, {
     ...rest,
     headers: requestHeaders,
     body: json !== undefined ? JSON.stringify(json) : rest.body,

@@ -2,6 +2,7 @@ FAKE_EMAILS = [
     {
         "subject": "Re: Q2 Roadmap Review",
         "from": "marcus@client-co.com",
+        "thread_id": "demo-roadmap-thread",
         "body": "Hi Alex, following up on the API rate limits we discussed. "
                 "We still see 429s in production. Can we get a fix by Friday?",
         "tags": ["customer", "gtm", "technical"],
@@ -9,6 +10,7 @@ FAKE_EMAILS = [
     {
         "subject": "Your runway",
         "from": "sarah@vc-firm.com",
+        "thread_id": "demo-runway-thread",
         "body": "Hey Alex—quick check-in. Burn looks high vs. MRR. "
                 "What's the plan to hit ramen profitability?",
         "tags": ["investor", "fundraise", "burn"],
@@ -16,15 +18,31 @@ FAKE_EMAILS = [
     {
         "subject": "Contractor invoices — June",
         "from": "dev@myStartup.io",
+        "thread_id": "demo-invoice-thread",
         "body": "Alex, 4 contractor invoices attached totalling $18k this month.",
         "tags": ["hiring", "dev-spend"],
     },
 ]
 
 FAKE_SLACK_MESSAGES = [
-    {"channel": "#engineering", "text": "Deploy failed on main — hotfix needed ASAP",        "tags": ["technical"]},
-    {"channel": "#growth",      "text": "Marcus from Client Co wants a demo next week",       "tags": ["gtm", "customer"]},
-    {"channel": "#founders",    "text": "Should we post the Series A deck to DocSend today?", "tags": ["fundraise"]},
+    {
+        "channel": "#engineering",
+        "message_ts": "1711908300.001100",
+        "text": "Deploy failed on main — hotfix needed ASAP",
+        "tags": ["technical"],
+    },
+    {
+        "channel": "#growth",
+        "message_ts": "1711909300.001200",
+        "text": "Marcus from Client Co wants a demo next week",
+        "tags": ["gtm", "customer"],
+    },
+    {
+        "channel": "#founders",
+        "message_ts": "1711910300.001300",
+        "text": "Should we post the Series A deck to DocSend today?",
+        "tags": ["fundraise"],
+    },
 ]
 
 FAKE_MEETINGS = [

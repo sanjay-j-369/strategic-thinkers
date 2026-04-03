@@ -4,6 +4,7 @@ from sqlalchemy import func, select
 
 from app.models.archive import Archive
 from app.pipeline.encryption import decrypt
+from app.pipeline.pii import strip_pii
 from app.security import resolve_user
 
 router = APIRouter(prefix="/api/archive", tags=["privacy"])
@@ -36,9 +37,12 @@ async def list_archive(
 
 @router.get("/{item_id}")
 async def get_archive_item(
-    item_id: str, request: Request, user_id: str | None = Query(None)
+    item_id: str,
+    request: Request,
+    user_id: str | None = Query(None),
+    include_raw: bool = Query(False),
 ):
-    """Decrypt and return a single archive item."""
+    """Return redacted content with token mapping; optionally include raw decrypted text."""
     user = await resolve_user(request, user_id=user_id)
     async_session = request.app.state.async_session
     async with async_session() as session:
@@ -49,9 +53,23 @@ async def get_archive_item(
         if not item:
             raise HTTPException(status_code=404, detail="Archive item not found")
 
-        plaintext = decrypt(str(user.id), item.content_enc)
+        user_id_str = str(user.id)
+        plaintext = decrypt(user_id_str, item.content_enc)
+        redacted_content, pii_mapping_enc = strip_pii(plaintext, user_id_str)
+        pii_mapping = {}
+        for token, enc_value in pii_mapping_enc.items():
+            try:
+                pii_mapping[token] = decrypt(user_id_str, enc_value)
+            except Exception:
+                continue
+
         data = item.to_dict()
-        data["content"] = plaintext
+        data["content"] = redacted_content
+        data["content_redacted"] = redacted_content
+        data["pii_mapping"] = pii_mapping
+        data["pii_tokens"] = sorted(list(pii_mapping.keys()))
+        if include_raw:
+            data["content_raw"] = plaintext
     return data
 
 

@@ -6,6 +6,29 @@
   :root {
     --font-sans: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
     --font-mono: "SF Mono", "Menlo", "Monaco", monospace;
+    --background: 0 0% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 222 47% 11%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 8% 42%;
+    --accent: 220 14% 93%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 62% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 88%;
+    --input: 220 13% 88%;
+    --ring: 222 47% 20%;
+    --radius: 1rem;
+  }
+
+  .dark {
     --background: 0 0% 3%;
     --foreground: 0 0% 97%;
     --card: 0 0% 8%;
@@ -25,15 +48,19 @@
     --border: 0 0% 18%;
     --input: 0 0% 16%;
     --ring: 0 0% 80%;
-    --radius: 1.5rem;
+    --radius: 1rem;
   }
 
   * {
     @apply border-border;
   }
 
-  html {
+  html.dark {
     color-scheme: dark;
+  }
+
+  html.light {
+    color-scheme: light;
   }
 
   body {
@@ -49,26 +76,32 @@
   }
 
   ::selection {
-    background: rgba(255, 255, 255, 0.18);
-    color: white;
+    background: rgba(59, 130, 246, 0.2);
+    color: inherit;
   }
 }
 
 @layer components {
   .mono-label {
-    @apply font-mono text-[11px] uppercase tracking-[0.24em] text-zinc-500;
+    @apply font-mono text-[11px] uppercase tracking-[0.24em] text-muted-foreground;
   }
 
   .chat-bubble {
-    @apply rounded-[24px] border px-4 py-4 text-sm leading-7 shadow-[0_18px_60px_rgba(0,0,0,0.22)];
+    @apply rounded-2xl border px-4 py-4 text-sm leading-7 shadow-sm;
   }
 
   .chat-bubble-assistant {
-    @apply border-white/10 bg-white/[0.04] text-zinc-200;
+    @apply border-border bg-card text-card-foreground;
   }
 
   .chat-bubble-user {
-    @apply border-white/15 bg-white text-black;
+    @apply border-border bg-primary text-primary-foreground;
+  }
+
+  .theme-surface {
+    background:
+      radial-gradient(circle at top, hsl(var(--foreground) / 0.05), transparent 28%),
+      linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--background)) 100%);
   }
 }
 
@@ -82,7 +115,7 @@ textarea {
   resize: vertical;
 }
 
-input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+html.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   filter: invert(1);
   opacity: 0.75;
 }
@@ -93,18 +126,50 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.03);
+  background: hsl(var(--background));
 }
 
 ::-webkit-scrollbar-thumb {
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.14);
+  background: hsl(var(--border));
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.22);
+  background: hsl(var(--muted-foreground) / 0.45);
   border: 2px solid transparent;
   background-clip: padding-box;
+}
+
+/* Light mode compatibility overrides for existing hardcoded dark utility classes */
+html.light .text-white {
+  color: hsl(var(--foreground)) !important;
+}
+
+html.light .text-zinc-100,
+html.light .text-zinc-200,
+html.light .text-zinc-300,
+html.light .text-zinc-400,
+html.light .text-zinc-500 {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+html.light .border-white\/10,
+html.light .border-white\/15 {
+  border-color: hsl(var(--border)) !important;
+}
+
+html.light .bg-black\/30,
+html.light .bg-black\/40,
+html.light .bg-black\/55,
+html.light .bg-black\/90 {
+  background-color: hsl(var(--card) / 0.9) !important;
+}
+
+html.light .bg-white\/\[0\.03\],
+html.light .bg-white\/\[0\.04\],
+html.light .bg-white\/\[0\.05\],
+html.light .bg-white\/\[0\.06\] {
+  background-color: hsl(var(--muted)) !important;
 }

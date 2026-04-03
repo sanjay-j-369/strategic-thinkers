@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     MASTER_FERNET_KEY: str = ""
     INGESTION_MODE: str = "simulate"
     SIMULATOR_SPEED: str = "normal"
+    DEMO_MODE: bool = False
+    DEMO_USER_ID: str = "550e8400-e29b-41d4-a716-446655440000"
 
     class Config:
         env_file = ".env"

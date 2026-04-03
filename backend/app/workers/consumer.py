@@ -52,6 +52,9 @@ def _handle_data_ingestion(event: FounderEvent, user_id: str):
             "entities": event.payload.entities,
             "context_tags": tags,
             "topic": event.payload.topic or "",
+            "source_id": event.payload.source_id or "",
+            "source_url": event.payload.source_url or "",
+            "is_action_item": bool(event.payload.is_action_item),
             "ingested_at": datetime.now(timezone.utc).isoformat(),
         },
     )
@@ -76,7 +79,7 @@ def _handle_assistant_prep(event: FounderEvent, user_id: str):
         entities=event.payload.entities,
         topic=event.payload.topic or "Meeting",
     )
-    _save_summary(user_id, "ASSISTANT_PREP", event.payload.topic, card.get("summary", ""))
+    _save_summary(user_id, "ASSISTANT_PREP", event.payload.topic, card)
     _publish_to_redis(user_id, card)
 
 
@@ -88,6 +91,7 @@ def _handle_guide_query(event: FounderEvent, user_id: str):
         "user_id": user_id,
         "question": event.payload.topic or event.payload.content_raw,
         "founder_profile": None,
+        "communication_style": None,
         "kb_results": None,
         "analysis": None,
         "red_flags": [],
@@ -100,9 +104,21 @@ def _handle_guide_query(event: FounderEvent, user_id: str):
         "analysis": result.get("analysis", ""),
         "red_flags": result.get("red_flags", []),
         "output": result.get("output", ""),
+        "communication_style": result.get("communication_style", ""),
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
-    _save_summary(user_id, "GUIDE_QUERY", result.get("question", ""), result.get("output", ""))
+    summary_type = (
+        "GUIDE_MILESTONE"
+        if "milestone-trigger" in (event.payload.context_tags or [])
+        else "GUIDE_QUERY"
+    )
+    _save_summary(user_id, summary_type, result.get("question", ""), card)
+    _archive_past_dilemma(
+        user_id=user_id,
+        question=result.get("question", ""),
+        output=result.get("output", ""),
+        red_flags=result.get("red_flags", []),
+    )
     _publish_to_redis(user_id, card)
 
 
@@ -165,7 +181,7 @@ def _save_archive(user_id: str, source: str, content_enc: str, tags: list):
         print(f"Archive save error: {e}")
 
 
-def _save_summary(user_id: str, summary_type: str, topic: str | None, summary_text: str):
+def _save_summary(user_id: str, summary_type: str, topic: str | None, summary_text: str | dict):
     from sqlalchemy import create_engine
     from sqlalchemy.orm import Session
     from app.models.summary import Summary
@@ -175,12 +191,15 @@ def _save_summary(user_id: str, summary_type: str, topic: str | None, summary_te
     try:
         engine = create_engine(db_url)
         Base.metadata.create_all(engine)
+        payload = summary_text
+        if isinstance(summary_text, dict):
+            payload = json.dumps(summary_text)
         with Session(engine) as session:
             session.add(Summary(
                 user_id=uuid.UUID(user_id),
                 type=summary_type,
                 topic=topic,
-                summary_text=summary_text,
+                summary_text=str(payload),
             ))
             session.commit()
     except Exception as e:
@@ -218,3 +237,29 @@ def _save_pii_mapping(user_id: str, mapping: dict):
             session.commit()
     except Exception as e:
         print(f"PiiVault save error: {e}")
+
+
+def _archive_past_dilemma(user_id: str, question: str, output: str, red_flags: list[str]):
+    from app.pipeline.embedder import upsert_to_pinecone
+
+    timestamp = datetime.now(timezone.utc).isoformat()
+    text = (
+        f"Past Dilemma: {question}\n"
+        f"Resolution: {output}\n"
+        f"Red Flags: {', '.join(red_flags) if red_flags else 'None'}"
+    )
+    vector_id = f"dilemma-{uuid.uuid4()}"
+    upsert_to_pinecone(
+        vector_id=vector_id,
+        text=text,
+        namespace="founder_memory",
+        metadata={
+            "user_id": user_id,
+            "source": "GUIDE_QUERY",
+            "text": text,
+            "context_tags": ["past-dilemma", "guide-query"],
+            "topic": question,
+            "is_action_item": False,
+            "ingested_at": timestamp,
+        },
+    )

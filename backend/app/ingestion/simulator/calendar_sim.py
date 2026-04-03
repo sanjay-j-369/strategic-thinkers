@@ -28,6 +28,7 @@ def poll_calendar_simulated(user_id: str | None = None):
             context_tags=["meeting-prep"],
             entities=meeting["attendees"],
             topic=meeting["summary"],
+            source_id=f"calendar:{meeting['summary']}",
         ),
     )
 

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from app.config import settings
 from app.models.base import Base
 from app.api.ws import manager
-from app.api.routes import auth, summaries, guide, privacy, simulate, ingest, meetings, chat
+from app.api.routes import auth, summaries, guide, privacy, simulate, ingest, meetings, chat, demo
 
 
 @asynccontextmanager
@@ -41,6 +41,14 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE summaries ADD COLUMN IF NOT EXISTS source_ref VARCHAR(255)"
         )
     app.state.async_session = async_sessionmaker(engine, expire_on_commit=False)
+
+    if settings.DEMO_MODE:
+        try:
+            from app.demo.persona import ensure_demo_persona
+
+            ensure_demo_persona(reset=False)
+        except Exception as exc:
+            print(f"[Demo] Persona bootstrap failed: {exc}")
 
     # Redis pub/sub listener
     redis_client = aioredis.from_url(settings.REDIS_URL)
@@ -89,6 +97,7 @@ app.include_router(simulate.router)
 app.include_router(ingest.router)
 app.include_router(meetings.router)
 app.include_router(chat.router)
+app.include_router(demo.router)
 
 
 @app.websocket("/ws/{user_id}")

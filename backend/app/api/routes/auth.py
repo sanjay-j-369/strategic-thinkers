@@ -16,6 +16,8 @@ from slack_sdk.errors import SlackApiError
 from sqlalchemy import select
 
 from app.ingestion.calendar import sync_calendar_events_for_user
+from app.config import settings
+from app.demo.persona import enqueue_demo_history, ensure_demo_persona, get_demo_snapshot
 from app.ingestion.gmail import GmailWorker
 from app.ingestion.slack import SlackWorker
 from app.models.user import User
@@ -23,6 +25,7 @@ from app.pipeline.encryption import decrypt, encrypt
 from app.security import (
     create_access_token,
     hash_password,
+    is_password_hash_format,
     require_current_user,
     resolve_user,
     user_public_dict,
@@ -144,7 +147,15 @@ async def sign_up(body: SignUpBody, request: Request):
         user = result.scalar_one_or_none()
 
         if user and user.password_hash:
-            raise HTTPException(status_code=409, detail="Email already exists")
+            if is_password_hash_format(user.password_hash):
+                # UX shortcut: treat signup with existing valid credentials as sign-in.
+                if verify_password(password, user.password_hash):
+                    return {"token": create_access_token(user), "user": user_public_dict(user)}
+                raise HTTPException(
+                    status_code=409,
+                    detail="Email already exists. Use Sign In or a different email.",
+                )
+            # Legacy or malformed hash format: allow password re-initialization.
 
         if user is None:
             user = User(email=email, full_name=full_name)
@@ -174,8 +185,45 @@ async def sign_in(body: SignInBody, request: Request):
         result = await session.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
 
-    if not user or not verify_password(password, user.password_hash):
+    if not user or not user.password_hash:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    if not is_password_hash_format(user.password_hash):
+        raise HTTPException(
+            status_code=400,
+            detail="This account needs a password reset. Use Sign Up with the same email to set a new password.",
+        )
+    if not verify_password(password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    return {"token": create_access_token(user), "user": user_public_dict(user)}
+
+
+@router.post("/demo-session")
+async def demo_session(request: Request):
+    if not settings.DEMO_MODE:
+        raise HTTPException(status_code=404, detail="Demo mode is disabled")
+
+    ensure_demo_persona(reset=False)
+    snapshot = get_demo_snapshot()
+    if (snapshot.get("summary_count") or 0) == 0:
+        # Migrate legacy demo state (old direct-seeded archives without generated cards)
+        if (snapshot.get("archive_count") or 0) > 0:
+            ensure_demo_persona(reset=True)
+        enqueue_demo_history(
+            source="all",
+            mode="full",
+            include_prep=True,
+            include_growth=True,
+        )
+
+    async_session = request.app.state.async_session
+    async with async_session() as session:
+        result = await session.execute(
+            select(User).where(User.id == uuid.UUID(settings.DEMO_USER_ID))
+        )
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=500, detail="Demo user setup failed")
 
     return {"token": create_access_token(user), "user": user_public_dict(user)}
 

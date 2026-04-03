@@ -1,3 +1,7 @@
+---
+applicable_stages: [pre-seed, seed, series-a]
+---
+
 # Startup Playbook
 
 1. Move Fast

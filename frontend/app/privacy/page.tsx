@@ -32,6 +32,13 @@ interface ArchiveItem {
   ingested_at: string;
 }
 
+interface ArchiveViewResponse {
+  content?: string;
+  content_redacted?: string;
+  content_raw?: string;
+  pii_mapping?: Record<string, string>;
+}
+
 export default function PrivacyPage() {
   const { ready, token } = useRequireAuth();
   const [items, setItems] = useState<ArchiveItem[]>([]);
@@ -42,6 +49,9 @@ export default function PrivacyPage() {
   const [viewOpen, setViewOpen] = useState(false);
   const [viewLoading, setViewLoading] = useState(false);
   const [viewContent, setViewContent] = useState("");
+  const [viewRawContent, setViewRawContent] = useState("");
+  const [showRaw, setShowRaw] = useState(false);
+  const [piiMapping, setPiiMapping] = useState<Record<string, string>>({});
   const [viewItem, setViewItem] = useState<ArchiveItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ArchiveItem | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -78,14 +88,19 @@ export default function PrivacyPage() {
     setNotice(null);
     setViewItem(item);
     setViewContent("");
+    setViewRawContent("");
+    setPiiMapping({});
+    setShowRaw(false);
     setViewOpen(true);
     setViewLoading(true);
 
     try {
-      const data = await apiFetch<{ content?: string }>(`/api/archive/${item.id}`, {
+      const data = await apiFetch<ArchiveViewResponse>(`/api/archive/${item.id}?include_raw=true`, {
         token,
       });
-      setViewContent(data.content || "No content available");
+      setViewContent(data.content_redacted || data.content || "No content available");
+      setViewRawContent(data.content_raw || "");
+      setPiiMapping(data.pii_mapping || {});
     } catch {
       setViewContent("Unable to load decrypted content.");
     } finally {
@@ -229,6 +244,19 @@ export default function PrivacyPage() {
                 : "Loading entry"}
             </DialogDescription>
           </DialogHeader>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">
+              {showRaw ? "Raw decrypted view" : "Redacted view (default)"}
+            </p>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowRaw((prev) => !prev)}
+              disabled={viewLoading || !viewRawContent}
+            >
+              {showRaw ? "Show Redacted" : "Show Raw"}
+            </Button>
+          </div>
           <div className="max-h-[60vh] overflow-y-auto rounded-[24px] border border-white/10 bg-black/40 p-4">
             {viewLoading ? (
               <div className="flex items-center gap-3 text-sm text-zinc-400">
@@ -237,10 +265,25 @@ export default function PrivacyPage() {
               </div>
             ) : (
               <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-7 text-zinc-300">
-                {viewContent}
+                {showRaw ? viewRawContent || viewContent : viewContent}
               </pre>
             )}
           </div>
+          {Object.keys(piiMapping).length > 0 ? (
+            <div className="rounded-[20px] border border-white/10 bg-black/30 p-4">
+              <p className="mono-label mb-3">PII Token Mapping</p>
+              <div className="space-y-2">
+                {Object.entries(piiMapping).map(([token, value]) => (
+                  <div key={token} className="grid gap-2 md:grid-cols-[1fr_2fr]">
+                    <code className="rounded bg-white/[0.06] px-2 py-1 text-xs text-zinc-300">
+                      {token}
+                    </code>
+                    <p className="text-sm text-zinc-300">{value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <DialogFooter>
             <Button variant="secondary" onClick={() => setViewOpen(false)}>
               Close

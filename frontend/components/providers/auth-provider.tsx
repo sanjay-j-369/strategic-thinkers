@@ -12,6 +12,7 @@ import {
 import { apiFetch } from "@/lib/api";
 
 const STORAGE_KEY = "founder-os-session";
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
 export interface AuthUser {
   id: string;
@@ -81,8 +82,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshSession = useCallback(async () => {
+    async function attemptDemoSession() {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const data = await apiFetch<{ token: string; user: AuthUser }>(
+            "/api/auth/demo-session",
+            { method: "POST" }
+          );
+          setSession(data.token, data.user);
+          return true;
+        } catch {
+          if (attempt === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 1200));
+          }
+        }
+      }
+      return false;
+    }
+
     const stored = readStoredSession();
     if (!stored?.token) {
+      if (DEMO_MODE) {
+        setLoading(true);
+        const ok = await attemptDemoSession();
+        if (!ok) {
+          signOut();
+        }
+        setLoading(false);
+        return;
+      }
       setLoading(false);
       return;
     }
@@ -94,7 +122,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       setSession(stored.token, data.user);
     } catch {
-      signOut();
+      if (DEMO_MODE) {
+        const ok = await attemptDemoSession();
+        if (!ok) {
+          signOut();
+        }
+      } else {
+        signOut();
+      }
     } finally {
       setLoading(false);
     }

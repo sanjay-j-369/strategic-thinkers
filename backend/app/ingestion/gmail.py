@@ -5,6 +5,7 @@ from google.oauth2.credentials import Credentials
 
 from app.schemas.events import FounderEvent, FounderEventMetadata, FounderEventPayload, TaskType, Source
 from app.pipeline.tagger import extract_tags
+from app.pipeline.action_items import detect_action_item_signal
 
 
 class GmailWorker:
@@ -68,11 +69,17 @@ class GmailWorker:
             subject = headers.get("Subject", "")
             sender = headers.get("From", "")
             snippet = msg.get("snippet", "")
+            thread_id = msg.get("threadId") or msg_ref.get("id")
 
             # Also try to get full body for meet link detection
             body = _extract_body(msg)
             content = f"Subject: {subject}\nFrom: {sender}\n\n{body or snippet}"
             tags = extract_tags(content)
+            source_url = (
+                f"https://mail.google.com/mail/u/0/#all/{thread_id}"
+                if thread_id
+                else None
+            )
             print(f"[Gmail] Found email: {subject} from {sender}")
 
             event = FounderEvent(
@@ -89,6 +96,9 @@ class GmailWorker:
                     context_tags=tags,
                     entities=[sender],
                     topic=subject,
+                    source_id=thread_id,
+                    source_url=source_url,
+                    is_action_item=detect_action_item_signal(content, tags),
                 ),
             )
 

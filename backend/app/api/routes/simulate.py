@@ -1,10 +1,11 @@
 import uuid
 from fastapi import APIRouter
 from pydantic import BaseModel
+from app.config import settings
 
 router = APIRouter(prefix="/api/simulate", tags=["simulate"])
 
-DEMO_USER_ID = "550e8400-e29b-41d4-a716-446655440000"
+DEMO_USER_ID = settings.DEMO_USER_ID
 
 
 class SimulateRequest(BaseModel):

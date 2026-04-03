@@ -10,6 +10,7 @@ import uuid
 from fastapi import HTTPException, Request
 from sqlalchemy import select
 
+from app.config import settings
 from app.models.user import User
 
 SESSION_TTL_SECONDS = 60 * 60 * 24 * 14
@@ -53,6 +54,19 @@ def verify_password(password: str, stored_hash: str | None) -> bool:
         PBKDF2_ITERATIONS,
     )
     return hmac.compare_digest(expected, _b64decode(digest_b64))
+
+
+def is_password_hash_format(stored_hash: str | None) -> bool:
+    """Validate local password hash format to support legacy-account recovery paths."""
+    if not stored_hash or "$" not in stored_hash:
+        return False
+    try:
+        salt_b64, digest_b64 = stored_hash.split("$", 1)
+        salt = _b64decode(salt_b64)
+        digest = _b64decode(digest_b64)
+    except Exception:
+        return False
+    return len(salt) >= 8 and len(digest) >= 16
 
 
 def create_access_token(user: User) -> str:
@@ -124,6 +138,26 @@ def _bearer_token(request: Request) -> str | None:
 async def get_optional_current_user(request: Request) -> User | None:
     token = _bearer_token(request)
     if not token:
+        if settings.DEMO_MODE:
+            async_session = request.app.state.async_session
+            async with async_session() as session:
+                result = await session.execute(
+                    select(User).where(User.id == uuid.UUID(settings.DEMO_USER_ID))
+                )
+                user = result.scalar_one_or_none()
+                if user:
+                    return user
+            try:
+                from app.demo.persona import ensure_demo_persona
+
+                ensure_demo_persona(reset=False)
+            except Exception:
+                return None
+            async with async_session() as session:
+                result = await session.execute(
+                    select(User).where(User.id == uuid.UUID(settings.DEMO_USER_ID))
+                )
+                return result.scalar_one_or_none()
         return None
 
     payload = decode_access_token(token)

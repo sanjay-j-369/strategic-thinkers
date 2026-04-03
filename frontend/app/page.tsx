@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Activity,
@@ -23,6 +24,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { apiFetch } from "@/lib/api";
 import { useFounderFeed } from "@/lib/websocket";
 
 const fadeTransition = (delay: number) => ({
@@ -32,8 +34,43 @@ const fadeTransition = (delay: number) => ({
 });
 
 export default function FeedPage() {
-  const { user, isAuthenticated, loading } = useAuth();
-  const cards = useFounderFeed(user?.id ?? "");
+  const { user, token, isAuthenticated, loading } = useAuth();
+  const cards = useFounderFeed(user?.id ?? "", token);
+  const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+  const [demoSnapshot, setDemoSnapshot] = useState<{
+    profile?: {
+      stage?: string;
+      mrr_usd?: number;
+      burn_rate_usd?: number;
+      runway_months?: number;
+      headcount?: number;
+    };
+    archive_count?: number;
+    summary_count?: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!demoMode || !token || !isAuthenticated) return;
+    let mounted = true;
+
+    async function loadSnapshot() {
+      try {
+        const data = await apiFetch<any>("/api/demo/snapshot", { token });
+        if (mounted) setDemoSnapshot(data);
+      } catch {
+        if (mounted) setDemoSnapshot(null);
+      }
+    }
+
+    void loadSnapshot();
+    const timer = setInterval(() => {
+      void loadSnapshot();
+    }, 8000);
+    return () => {
+      mounted = false;
+      clearInterval(timer);
+    };
+  }, [demoMode, token, isAuthenticated]);
   const prepCount = cards.filter((card) => card.type === "ASSISTANT_PREP").length;
   const insightCount = cards.filter((card) => card.type === "GUIDE_QUERY").length;
 
@@ -219,6 +256,40 @@ export default function FeedPage() {
           </motion.div>
         ))}
       </motion.section>
+
+      {demoMode && isAuthenticated && demoSnapshot?.profile ? (
+        <Card>
+          <CardContent className="grid gap-4 pt-6 md:grid-cols-3">
+            <div>
+              <p className="mono-label mb-2">Demo Stage</p>
+              <p className="text-lg font-semibold text-white">
+                {demoSnapshot.profile.stage || "seed"}
+              </p>
+              <p className="text-sm text-zinc-500">
+                Headcount {demoSnapshot.profile.headcount ?? "-"}
+              </p>
+            </div>
+            <div>
+              <p className="mono-label mb-2">Revenue vs Burn</p>
+              <p className="text-lg font-semibold text-white">
+                ${Math.round(demoSnapshot.profile.mrr_usd || 0).toLocaleString()} MRR
+              </p>
+              <p className="text-sm text-zinc-500">
+                Burn ${Math.round(demoSnapshot.profile.burn_rate_usd || 0).toLocaleString()} / mo
+              </p>
+            </div>
+            <div>
+              <p className="mono-label mb-2">Pipeline State</p>
+              <p className="text-lg font-semibold text-white">
+                {demoSnapshot.archive_count ?? 0} archived events
+              </p>
+              <p className="text-sm text-zinc-500">
+                {demoSnapshot.summary_count ?? 0} generated cards
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <section className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">

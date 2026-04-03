@@ -17,6 +17,7 @@ celery_app = Celery(
     include=[
         "app.workers.consumer",
         "app.workers.real_ingestion",
+        "app.workers.thresholds",
         "app.ingestion.calendar",
         "app.ingestion.simulator.calendar_sim",
     ],

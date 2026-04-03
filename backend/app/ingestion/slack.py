@@ -5,6 +5,7 @@ from slack_sdk.errors import SlackApiError
 
 from app.schemas.events import FounderEvent, FounderEventMetadata, FounderEventPayload, TaskType, Source
 from app.pipeline.tagger import extract_tags
+from app.pipeline.action_items import detect_action_item_signal
 
 
 class SlackWorker:
@@ -44,12 +45,14 @@ class SlackWorker:
         text = event.get("text", "")
         channel = event.get("channel", "")
         user = event.get("user", "")
+        ts = event.get("ts", "")
 
         if not text:
             return None
 
         content = f"Channel: {channel}\nUser: {user}\n\n{text}"
         tags = extract_tags(content)
+        source_url = self._permalink(channel, ts) if channel and ts else None
 
         founder_event = FounderEvent(
             metadata=FounderEventMetadata(
@@ -65,6 +68,9 @@ class SlackWorker:
                 context_tags=tags,
                 entities=[user],
                 topic=channel,
+                source_id=f"{channel}:{ts}" if ts else channel,
+                source_url=source_url,
+                is_action_item=detect_action_item_signal(content, tags),
             ),
         )
 
@@ -100,8 +106,10 @@ class SlackWorker:
                     if not text:
                         continue
 
+                    ts = msg.get("ts", "")
                     content = f"Channel: {channel_id}\n\n{text}"
                     tags = extract_tags(content)
+                    source_url = self._permalink(channel_id, ts) if ts else None
 
                     event = FounderEvent(
                         metadata=FounderEventMetadata(
@@ -117,6 +125,9 @@ class SlackWorker:
                             context_tags=tags,
                             entities=[],
                             topic=channel_id,
+                            source_id=f"{channel_id}:{ts}" if ts else channel_id,
+                            source_url=source_url,
+                            is_action_item=detect_action_item_signal(content, tags),
                         ),
                     )
 
@@ -130,3 +141,12 @@ class SlackWorker:
                 pass
 
         return events
+
+    def _permalink(self, channel: str, ts: str) -> str | None:
+        if not self.client:
+            return None
+        try:
+            response = self.client.chat_getPermalink(channel=channel, message_ts=ts)
+            return response.get("permalink")
+        except SlackApiError:
+            return None

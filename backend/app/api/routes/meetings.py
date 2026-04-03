@@ -57,6 +57,7 @@ async def schedule_meeting(body: MeetingRequest, request: Request):
             context_tags=["meeting-prep"],
             entities=body.attendees,
             topic=body.topic,
+            source_id=f"manual-meeting:{meeting_id}",
         ),
     )
     celery_app.send_task("process_founder_event", args=[event.model_dump(mode="json")], priority=1)

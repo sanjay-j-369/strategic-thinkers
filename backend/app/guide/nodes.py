@@ -43,25 +43,57 @@ def fetch_founder_state(state: dict) -> dict:
     return {**state, "founder_profile": profile_dict}
 
 
+def evaluate_company_stage(state: dict) -> dict:
+    """Node 1.5 — Set communication style from current stage."""
+    profile = state.get("founder_profile", {}) or {}
+    stage = (profile.get("stage") or "").strip().lower().replace(" ", "-")
+
+    if stage in {"pre-seed", "preseed"}:
+        style = "direct, navigational, and prescriptive"
+    elif stage in {"series-a", "series a"}:
+        style = "socratic and reflective"
+    else:
+        style = "clear and pragmatic"
+
+    return {**state, "communication_style": style}
+
+
 def query_knowledge_base(state: dict) -> dict:
     """Node 2 — Dual-query Pinecone: founder_memory + startup_playbooks."""
     index = _get_pinecone_index()
     vec = _embed(state["question"])
+    profile = state.get("founder_profile", {}) or {}
+    stage = (profile.get("stage") or "").strip().lower().replace(" ", "-")
 
     internal = index.query(
         vector=vec,
         filter={"user_id": state["user_id"]},
-        top_k=5,
+        top_k=6,
         namespace="founder_memory",
         include_metadata=True,
     )
 
-    external = index.query(
-        vector=vec,
-        top_k=8,
-        namespace="startup_playbooks",
-        include_metadata=True,
-    )
+    external_filter = None
+    if stage:
+        external_filter = {"applicable_stages": {"$in": [stage]}}
+
+    external_kwargs = {
+        "vector": vec,
+        "top_k": 8,
+        "namespace": "startup_playbooks",
+        "include_metadata": True,
+    }
+    if external_filter:
+        external_kwargs["filter"] = external_filter
+
+    external = index.query(**external_kwargs)
+    if external_filter and not external.matches:
+        external = index.query(
+            vector=vec,
+            top_k=8,
+            namespace="startup_playbooks",
+            include_metadata=True,
+        )
 
     kb = [m.metadata for m in internal.matches + external.matches]
     return {**state, "kb_results": kb}
@@ -72,11 +104,20 @@ def cross_reference_and_analyze(state: dict) -> dict:
     profile = state.get("founder_profile", {})
     kb_results = state.get("kb_results", [])
     question = state.get("question", "")
+    style = state.get("communication_style", "clear and pragmatic")
 
     kb_text = "\n---\n".join([r.get("text", str(r)) for r in kb_results[:10]])
+    past_dilemmas = [
+        r.get("text", "")
+        for r in kb_results
+        if "past-dilemma" in (r.get("context_tags") or [])
+    ]
+    dilemma_text = "\n".join(past_dilemmas[:2]) if past_dilemmas else "None"
 
     prompt = f"""Founder profile: {profile}
 Relevant knowledge: {kb_text}
+Past dilemmas solved by this founder: {dilemma_text}
+Communication style: {style}
 Question: {question}
 
 Compare the founder's current metrics against external benchmarks.
@@ -113,15 +154,21 @@ def generate_decision_framework(state: dict) -> dict:
     """Node 5 — Groq LLM: structured decision framework."""
     analysis = state.get("analysis", "")
     red_flags = state.get("red_flags", [])
+    style = state.get("communication_style", "clear and pragmatic")
     flags_text = "\n".join(f"🚩 {f}" for f in red_flags) if red_flags else "No critical red flags detected."
 
     prompt = f"""Analysis: {analysis}
 Red Flags: {flags_text}
+Communication style: {style}
 
 Output a structured Decision Framework (NOT a yes/no):
 1. Your current situation vs. industry benchmark.
 2. Key risks if you proceed / don't proceed.
-3. A concrete 3-step action plan used by top-tier startups at this stage."""
+3. A concrete 3-step action plan used by top-tier startups at this stage.
+
+Tone policy:
+- If style says direct/prescriptive, be decisive and navigational.
+- If style says socratic/reflective, ask 2 concise calibration questions before recommendation."""
 
     response = _groq_client().chat.completions.create(
         model="llama-3.3-70b-versatile",
