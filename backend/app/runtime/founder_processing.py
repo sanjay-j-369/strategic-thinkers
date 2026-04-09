@@ -16,6 +16,8 @@ from app.models.archive import Archive
 from app.models.base import Base
 from app.models.pii_vault import PiiVault
 from app.models.summary import Summary
+from app.models.user import User
+from app.observability import emit_demo_log
 from app.pipeline.embedder import upsert_to_pinecone
 from app.pipeline.encryption import encrypt
 from app.pipeline.meeting_detector import detect_meeting
@@ -27,6 +29,15 @@ from app.schemas.events import FounderEvent, TaskType
 def process_founder_event_sync(event_data: dict) -> dict:
     event = FounderEvent(**event_data)
     user_id = str(event.metadata.user_id)
+    emit_demo_log(
+        user_id=user_id,
+        message=f"[Ingestion Pipeline] Processing {event.payload.source.value} event {event.metadata.trace_id}.",
+        pillar="SYSTEM",
+        agent_name="Ingestion Pipeline",
+        event_type="pipeline_log",
+        step="started",
+        details={"task_type": event.task_type.value, "trace_id": event.metadata.trace_id},
+    )
 
     if event.task_type == TaskType.DATA_INGESTION:
         return _handle_data_ingestion(event, user_id)
@@ -39,10 +50,31 @@ def process_founder_event_sync(event_data: dict) -> dict:
 
 def _handle_data_ingestion(event: FounderEvent, user_id: str) -> dict:
     content_raw = event.payload.content_raw
-    content_redacted, pii_mapping = strip_pii(content_raw, user_id)
+    emit_demo_log(
+        user_id=user_id,
+        message="[Ingestion Pipeline] Stripping PII from inbound content.",
+        pillar="SYSTEM",
+        agent_name="Ingestion Pipeline",
+        event_type="pipeline_log",
+        step="pii",
+        details={"trace_id": event.metadata.trace_id},
+    )
+    user_public_key = _get_user_public_key(user_id)
+    content_redacted, pii_mapping = strip_pii(
+        content_raw, user_id, user_public_key=user_public_key
+    )
     content_enc = encrypt(user_id, content_raw)
     tags = event.payload.context_tags or extract_tags(content_redacted)
 
+    emit_demo_log(
+        user_id=user_id,
+        message="[Ingestion Pipeline] Upserting the redacted content into Pinecone.",
+        pillar="SYSTEM",
+        agent_name="Ingestion Pipeline",
+        event_type="pipeline_log",
+        step="vector_store",
+        details={"trace_id": event.metadata.trace_id, "tag_count": len(tags)},
+    )
     upsert_to_pinecone(
         vector_id=event.metadata.trace_id,
         text=content_redacted,
@@ -62,6 +94,15 @@ def _handle_data_ingestion(event: FounderEvent, user_id: str) -> dict:
     )
 
     pii_tokens = sorted(list(pii_mapping.keys())) if pii_mapping else []
+    emit_demo_log(
+        user_id=user_id,
+        message="[Ingestion Pipeline] Persisting the archive record and PII vault entries.",
+        pillar="SYSTEM",
+        agent_name="Ingestion Pipeline",
+        event_type="pipeline_log",
+        step="archive",
+        details={"trace_id": event.metadata.trace_id, "pii_token_count": len(pii_tokens)},
+    )
     _save_archive(
         user_id=user_id,
         source=event.payload.source.value,
@@ -71,12 +112,34 @@ def _handle_data_ingestion(event: FounderEvent, user_id: str) -> dict:
         pii_tokens=pii_tokens,
     )
     if pii_mapping:
-        _save_pii_mapping(user_id, pii_mapping)
+        _save_pii_mapping(
+            user_id,
+            pii_mapping,
+            encryption_scheme="rsa_oaep" if user_public_key else "fernet",
+        )
 
     meeting = detect_meeting(content_redacted, event.payload.source.value)
     if meeting:
+        emit_demo_log(
+            user_id=user_id,
+            message="[Ingestion Pipeline] Meeting signal detected. Generating prep artifacts.",
+            pillar="SYSTEM",
+            agent_name="Ingestion Pipeline",
+            event_type="pipeline_log",
+            step="meeting_detection",
+            details={"trace_id": event.metadata.trace_id, "topic": meeting.get("topic")},
+        )
         _save_meeting_from_detection(user_id, meeting)
 
+    emit_demo_log(
+        user_id=user_id,
+        message="[Ingestion Pipeline] Handing the updated memory over to the Assistant lane.",
+        pillar="SYSTEM",
+        agent_name="Ingestion Pipeline",
+        event_type="pipeline_log",
+        step="assistant_cycle",
+        details={"trace_id": event.metadata.trace_id},
+    )
     assistant_result = run_assistant_cycle(user_id=user_id, mode="ingestion_watch")
     saved_promises = save_promise_items(user_id, assistant_result.get("promises", []))
     saved_drafts = save_drafts(user_id, assistant_result.get("drafts", []))
@@ -93,6 +156,18 @@ def _handle_data_ingestion(event: FounderEvent, user_id: str) -> dict:
         )
         for notification in assistant_result.get("notifications", [])
     ]
+    emit_demo_log(
+        user_id=user_id,
+        message=(
+            f"[Ingestion Pipeline] Completed processing with {len(saved_promises)} promise(s), "
+            f"{len(saved_drafts)} draft(s), and {len(notifications)} notification(s)."
+        ),
+        pillar="SYSTEM",
+        agent_name="Ingestion Pipeline",
+        event_type="pipeline_log",
+        step="completed",
+        details={"trace_id": event.metadata.trace_id},
+    )
     return {
         "notifications": notifications,
         "promise_count": len(saved_promises),
@@ -233,7 +308,7 @@ def _save_summary(user_id: str, summary_type: str, topic: str | None, summary_te
         session.commit()
 
 
-def _save_pii_mapping(user_id: str, mapping: dict) -> None:
+def _save_pii_mapping(user_id: str, mapping: dict, encryption_scheme: str) -> None:
     engine = build_sync_engine()
     Base.metadata.create_all(engine)
     with Session(engine) as session:
@@ -243,9 +318,22 @@ def _save_pii_mapping(user_id: str, mapping: dict) -> None:
                     user_id=uuid.UUID(user_id),
                     token=token,
                     encrypted_value=enc_val,
+                    encryption_scheme=encryption_scheme,
                 )
             )
         session.commit()
+
+
+def _get_user_public_key(user_id: str) -> str | None:
+    engine = build_sync_engine()
+    Base.metadata.create_all(engine)
+    with Session(engine) as session:
+        user = session.execute(
+            select(User).where(User.id == uuid.UUID(user_id))
+        ).scalar_one_or_none()
+        if not user:
+            return None
+        return user.public_key
 
 
 def _archive_past_dilemma(user_id: str, question: str, output: str, red_flags: list[str]) -> None:

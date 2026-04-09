@@ -57,8 +57,8 @@ const config: Config = {
         sm: "0px",
       },
       fontFamily: {
-        sans: ["var(--font-sans)", "sans-serif"],
-        pixel: ["var(--font-pixel)", "monospace"],
+        sans: ['"Terminus Nerd Font"', "Terminus", "monospace"],
+        pixel: ['"Terminus Nerd Font"', "Terminus", "monospace"],
       },
       boxShadow: {
         pixel: "4px 4px 0px 0px rgba(0, 0, 0, 0.4)",

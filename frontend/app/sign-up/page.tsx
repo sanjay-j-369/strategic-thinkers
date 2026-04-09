@@ -19,6 +19,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiFetch } from "@/lib/api";
+import {
+  deriveMasterKey,
+  exportPublicKeyPem,
+  generateKeyPair,
+  generateSalt,
+  wrapPrivateKey,
+} from "@/lib/crypto";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -49,15 +56,25 @@ export default function SignUpPage() {
     setError(null);
 
     try {
+      const salt = generateSalt();
+      const masterKey = await deriveMasterKey(password, salt);
+      const keyPair = await generateKeyPair();
+      const publicKey = await exportPublicKeyPem(keyPair.publicKey);
+      const encryptedPrivateKey = await wrapPrivateKey(keyPair.privateKey, masterKey);
+
       const data = await apiFetch<{
         token: string;
         user: Parameters<typeof setSession>[1];
+        encrypted_private_key?: string | null;
       }>("/api/auth/signup", {
         method: "POST",
         json: {
           full_name: fullName,
           email,
           password,
+          salt,
+          public_key: publicKey,
+          encrypted_private_key: encryptedPrivateKey,
         },
       });
       setSession(data.token, data.user);
@@ -71,7 +88,7 @@ export default function SignUpPage() {
 
   return (
     <div className="grid min-h-[calc(100vh-10rem)] items-center gap-5 xl:grid-cols-[minmax(0,1fr)_480px]">
-      <Card className="neo-card bg-[#dff2ff]">
+      <Card className="border-2 border-border bg-card shadow-pixel bg-card">
         <CardHeader>
           <Badge className="w-fit">New Account</Badge>
           <CardTitle className="max-w-2xl font-sans text-4xl font-black uppercase tracking-[-0.05em]">
@@ -82,16 +99,16 @@ export default function SignUpPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="neo-stat bg-white">
-            <p className="mono-label text-black/50">What gets created</p>
-            <p className="mt-3 text-sm leading-7 text-black/75">
+          <div className="border-2 border-border px-4 py-4 shadow-pixel bg-background">
+            <p className="mono-label text-foreground/50">What gets created</p>
+            <p className="mt-3 text-sm leading-7 text-foreground/75">
               A private operator workspace with notifications, meetings, promises, drafts, archive memory, and connected-source sync.
             </p>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="neo-card">
+      <Card className="border-2 border-border bg-card shadow-pixel">
         <CardHeader>
           <Badge variant="secondary" className="w-fit">
             Sign Up

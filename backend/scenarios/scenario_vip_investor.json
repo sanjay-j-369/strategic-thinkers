@@ -1,0 +1,25 @@
+[
+  {
+    "timestamp": "2026-04-09T16:00:00Z",
+    "source": "gmail",
+    "sender": {
+      "name": "Naomi Chen",
+      "email": "naomi@northstar.vc"
+    },
+    "subject": "Request for updated metrics and data room",
+    "body": "We are discussing your company in partner meeting tomorrow. Please send the latest metrics pack, deck, and data room link tonight if possible.",
+    "context_tags": ["investor", "metrics", "vip"],
+    "source_id": "gmail-vip-001"
+  },
+  {
+    "timestamp": "2026-04-09T16:04:00Z",
+    "source": "slack",
+    "sender": {
+      "name": "Co-founder"
+    },
+    "channel": "#leadership",
+    "body": "Northstar wants updated metrics and the deck tonight. We should send a crisp response within the hour.",
+    "context_tags": ["investor", "leadership"],
+    "source_id": "slack-vip-002"
+  }
+]

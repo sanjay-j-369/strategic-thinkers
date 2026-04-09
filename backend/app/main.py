@@ -1,10 +1,12 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.ws import manager
-from app.api.routes import auth, summaries, guide, privacy, simulate, ingest, meetings, chat, demo, ops
+from app.api import demo as demo_api
+from app.api.routes import auth, summaries, guide, privacy, simulate, ingest, meetings, chat, ops
 from app.config import settings
 from app.db import build_async_engine, build_session_factory, init_database
 from app.runtime.notifier import InMemoryNotificationBus
@@ -17,6 +19,7 @@ from app.runtime.task_handlers import get_task_handlers
 async def lifespan(app: FastAPI):
     engine = build_async_engine()
     await init_database(engine)
+    manager.bind_loop(asyncio.get_running_loop())
     app.state.async_session = build_session_factory(engine)
     app.state.task_queue = PostgresTaskQueue(app.state.async_session)
     app.state.notification_bus = InMemoryNotificationBus(manager)
@@ -61,19 +64,32 @@ app.include_router(simulate.router)
 app.include_router(ingest.router)
 app.include_router(meetings.router)
 app.include_router(chat.router)
-app.include_router(demo.router)
+app.include_router(demo_api.router)
 app.include_router(ops.router)
+
+
+@app.websocket("/ws/admin/logs")
+async def admin_logs_websocket(websocket: WebSocket):
+    if not settings.DEMO_MODE:
+        await websocket.close(code=4403, reason="Demo mode is disabled")
+        return
+    await manager.connect_admin(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect_admin(websocket)
 
 
 @app.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
-    await manager.connect(user_id, websocket)
+    await manager.connect_user(user_id, websocket)
     try:
         while True:
             # Keep connection alive; messages are pushed from Redis listener
             await websocket.receive_text()
     except WebSocketDisconnect:
-        manager.disconnect(user_id, websocket)
+        manager.disconnect_user(user_id, websocket)
 
 
 @app.get("/health")

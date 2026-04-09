@@ -33,9 +33,8 @@ function signalIcon(type?: string, pillar?: string) {
 }
 
 function signalTone(severity?: string) {
-  if (severity === "critical") return "bg-rose-400";
-  if (severity === "warning") return "bg-amber-300";
-  return "bg-cyan-300";
+  if (severity === "critical" || severity === "warning") return "bg-primary";
+  return "bg-card";
 }
 
 export function SignalCard({ signal }: { signal: SignalItem }) {
@@ -55,12 +54,12 @@ export function SignalCard({ signal }: { signal: SignalItem }) {
   const timestamp = signal.created_at || signal.generated_at;
 
   return (
-    <Card className="neo-card overflow-hidden">
-      <CardHeader className="border-b-2 border-black pb-5">
+    <Card className="border-2 border-border bg-card shadow-pixel overflow-hidden">
+      <CardHeader className="border-b-2 border-border pb-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="flex items-start gap-4">
-            <div className={`mt-1 flex h-12 w-12 items-center justify-center border-2 border-black ${signalTone(signal.severity)}`}>
-              <Icon className="h-5 w-5 text-black" />
+            <div className={`mt-1 flex h-12 w-12 items-center justify-center border-2 border-border ${signalTone(signal.severity)}`}>
+              <Icon className="h-5 w-5 text-foreground" />
             </div>
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
@@ -71,7 +70,7 @@ export function SignalCard({ signal }: { signal: SignalItem }) {
               <CardTitle className="font-sans text-2xl font-black uppercase tracking-tight">
                 {signal.title || "Untitled signal"}
               </CardTitle>
-              <div className="flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.18em] text-black/60">
+              <div className="flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.18em] text-foreground/60">
                 <span>{signal.agent_name || "Founder OS"}</span>
                 {timestamp ? (
                   <span className="inline-flex items-center gap-1">
@@ -88,7 +87,7 @@ export function SignalCard({ signal }: { signal: SignalItem }) {
               href={payload.source_url}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 border-2 border-black bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.18em] shadow-[4px_4px_0_0_#000]"
+              className="shadow-pixel inline-flex items-center gap-2 border-2 border-border bg-card px-3 py-2 text-xs font-black uppercase tracking-[0.18em]"
             >
               Source
               <ArrowUpRight className="h-3.5 w-3.5" />
@@ -97,16 +96,16 @@ export function SignalCard({ signal }: { signal: SignalItem }) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4 pt-6">
-        <p className="text-sm leading-7 text-black/80">{signal.body || "No body available."}</p>
+        <p className="text-sm leading-7 text-foreground/80">{signal.body || "No body available."}</p>
         {payload && typeof payload === "object" && Object.keys(payload).length > 0 ? (
           <div className="grid gap-2 md:grid-cols-2">
             {Object.entries(payload)
               .filter(([key, value]) => key !== "type" && key !== "summary" && key !== "output" && value != null && typeof value !== "object")
               .slice(0, 6)
               .map(([key, value]) => (
-                <div key={key} className="border-2 border-black bg-white px-3 py-3 shadow-[4px_4px_0_0_#000]">
-                  <p className="mono-label text-black/50">{key.replace(/_/g, " ")}</p>
-                  <p className="mt-1 text-sm font-medium text-black">{String(value)}</p>
+                <div key={key} className="shadow-pixel border-2 border-border bg-card px-3 py-3">
+                  <p className="mono-label text-foreground/50">{key.replace(/_/g, " ")}</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">{String(value)}</p>
                 </div>
               ))}
           </div>

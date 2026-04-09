@@ -19,6 +19,9 @@ class User(Base):
     slack_token: Mapped[str | None] = mapped_column(String, nullable=True)
     slack_team_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     slack_channel_ids: Mapped[str | None] = mapped_column(Text, nullable=True)
+    salt: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    public_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    encrypted_private_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     google_last_synced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

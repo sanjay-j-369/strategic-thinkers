@@ -66,6 +66,9 @@ class SignUpBody(BaseModel):
     email: str
     password: str
     full_name: str | None = None
+    salt: str | None = None
+    public_key: str | None = None
+    encrypted_private_key: str | None = None
 
 
 class SignInBody(BaseModel):
@@ -131,6 +134,21 @@ def _validate_password(password: str) -> None:
         )
 
 
+def _validate_key_material(
+    *,
+    salt: str | None,
+    public_key: str | None,
+    encrypted_private_key: str | None,
+) -> None:
+    values = [salt, public_key, encrypted_private_key]
+    provided = [value for value in values if value]
+    if provided and len(provided) != len(values):
+        raise HTTPException(
+            status_code=400,
+            detail="salt, public_key, and encrypted_private_key must be provided together",
+        )
+
+
 @router.post("/signup")
 async def sign_up(body: SignUpBody, request: Request):
     email = _normalize_email(body.email)
@@ -140,6 +158,11 @@ async def sign_up(body: SignUpBody, request: Request):
     if not email:
         raise HTTPException(status_code=400, detail="Email is required")
     _validate_password(password)
+    _validate_key_material(
+        salt=body.salt,
+        public_key=body.public_key,
+        encrypted_private_key=body.encrypted_private_key,
+    )
 
     async_session = request.app.state.async_session
     async with async_session() as session:
@@ -150,7 +173,11 @@ async def sign_up(body: SignUpBody, request: Request):
             if is_password_hash_format(user.password_hash):
                 # UX shortcut: treat signup with existing valid credentials as sign-in.
                 if verify_password(password, user.password_hash):
-                    return {"token": create_access_token(user), "user": user_public_dict(user)}
+                    return {
+                        "token": create_access_token(user),
+                        "user": user_public_dict(user),
+                        "encrypted_private_key": user.encrypted_private_key,
+                    }
                 raise HTTPException(
                     status_code=409,
                     detail="Email already exists. Use Sign In or a different email.",
@@ -166,10 +193,39 @@ async def sign_up(body: SignUpBody, request: Request):
                 user.full_name = full_name
 
         user.password_hash = hash_password(password)
+        if body.salt and body.public_key and body.encrypted_private_key:
+            user.salt = body.salt
+            user.public_key = body.public_key
+            user.encrypted_private_key = body.encrypted_private_key
         await session.commit()
         await session.refresh(user)
 
-    return {"token": create_access_token(user), "user": user_public_dict(user)}
+    return {
+        "token": create_access_token(user),
+        "user": user_public_dict(user),
+        "encrypted_private_key": user.encrypted_private_key,
+    }
+
+
+@router.get("/key-salt")
+async def key_salt(email: str, request: Request):
+    normalized_email = _normalize_email(email)
+    if not normalized_email:
+        raise HTTPException(status_code=400, detail="Email is required")
+
+    async_session = request.app.state.async_session
+    async with async_session() as session:
+        result = await session.execute(select(User).where(User.email == normalized_email))
+        user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not user.salt:
+        raise HTTPException(
+            status_code=409,
+            detail="Account is missing E2EE key material. Re-run Sign Up with the same email to initialize it.",
+        )
+    return {"salt": user.salt}
 
 
 @router.post("/signin")
@@ -195,7 +251,11 @@ async def sign_in(body: SignInBody, request: Request):
     if not verify_password(password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    return {"token": create_access_token(user), "user": user_public_dict(user)}
+    return {
+        "token": create_access_token(user),
+        "user": user_public_dict(user),
+        "encrypted_private_key": user.encrypted_private_key,
+    }
 
 
 @router.post("/demo-session")

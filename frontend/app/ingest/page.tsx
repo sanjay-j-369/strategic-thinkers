@@ -379,7 +379,7 @@ export default function IngestPage() {
                 </CardHeader>
               </Card>
 
-              <Card className="neo-card">
+              <Card className="border-2 border-border bg-card shadow-pixel">
                 <CardContent className="pt-6">
                   <Tabs
                     value={tab}
@@ -411,7 +411,7 @@ export default function IngestPage() {
                   transition={{ duration: 0.2 }}
                 >
                   <TabsContent value="email">
-                    <Card className="neo-card">
+                    <Card className="border-2 border-border bg-card shadow-pixel">
                       <CardContent className="pt-6">
                       <form onSubmit={submitEmail} className="space-y-5">
                         <div className="space-y-2">
@@ -453,7 +453,7 @@ export default function IngestPage() {
                     </Card>
                   </TabsContent>
                   <TabsContent value="slack">
-                    <Card className="neo-card">
+                    <Card className="border-2 border-border bg-card shadow-pixel">
                       <CardContent className="pt-6">
                       <form onSubmit={submitSlack} className="space-y-5">
                         <div className="space-y-2">

@@ -44,7 +44,7 @@ function TabsList({
   return (
     <div
       className={cn(
-        "inline-flex border-2 border-black bg-white p-1 shadow-[4px_4px_0_0_#000]",
+        "shadow-pixel inline-flex border-2 border-border bg-card p-1",
         className
       )}
       {...props}
@@ -66,10 +66,10 @@ function TabsTrigger({
       type="button"
       data-state={active ? "active" : "inactive"}
       className={cn(
-        "inline-flex min-w-[120px] items-center justify-center gap-2 border-2 border-black px-4 py-2 text-xs font-black uppercase tracking-[0.14em] transition-all",
+        "inline-flex min-w-[120px] items-center justify-center gap-2 border-2 border-border px-4 py-2 text-xs font-black uppercase tracking-[0.14em] transition-all",
         active
-          ? "bg-[#ffde59] text-black shadow-[4px_4px_0_0_#000]"
-          : "bg-white text-black hover:bg-[#dff2ff]",
+          ? "shadow-pixel bg-primary text-primary-foreground"
+          : "bg-card text-card-foreground hover:bg-primary/20",
         className
       )}
       onClick={() => setValue(value)}

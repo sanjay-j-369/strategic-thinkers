@@ -3,14 +3,14 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
 
-const alertVariants = cva("border-2 border-black p-4 shadow-[4px_4px_0_0_#000]", {
+const alertVariants = cva("shadow-pixel border-2 border-border p-4", {
   variants: {
     variant: {
-      default: "bg-white text-black",
-      info: "bg-[#dff2ff] text-black",
-      success: "bg-[#d8ff8f] text-black",
-      warning: "bg-[#ffe28a] text-black",
-      destructive: "bg-[#ffb0a8] text-black",
+      default: "bg-card text-card-foreground",
+      info: "bg-card text-card-foreground",
+      success: "bg-primary text-primary-foreground",
+      warning: "bg-primary text-primary-foreground",
+      destructive: "bg-primary text-primary-foreground",
     },
   },
   defaultVariants: {

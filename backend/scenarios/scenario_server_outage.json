@@ -1,0 +1,37 @@
+[
+  {
+    "timestamp": "2026-04-09T09:00:00Z",
+    "source": "slack",
+    "sender": {
+      "name": "Maya",
+      "email": "maya@acme.io"
+    },
+    "channel": "#support-escalations",
+    "body": "Three enterprise customers are reporting 500s on the billing API. We need an owner now.",
+    "context_tags": ["incident", "customer", "technical", "urgent"],
+    "source_id": "slack-outage-001"
+  },
+  {
+    "timestamp": "2026-04-09T09:02:00Z",
+    "source": "slack",
+    "sender": {
+      "name": "Ravi"
+    },
+    "channel": "#engineering",
+    "body": "Seeing elevated error rates after the last deploy. Rolling back the billing worker now.",
+    "context_tags": ["incident", "technical"],
+    "source_id": "slack-outage-002"
+  },
+  {
+    "timestamp": "2026-04-09T09:04:00Z",
+    "source": "gmail",
+    "sender": {
+      "name": "Ops Lead",
+      "email": "ops@customerco.com"
+    },
+    "subject": "P1: Billing workflow unavailable",
+    "body": "Our finance team cannot process invoices. Please confirm ETA for a fix and whether data is affected.",
+    "context_tags": ["customer", "incident", "billing"],
+    "source_id": "gmail-outage-003"
+  }
+]

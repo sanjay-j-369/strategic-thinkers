@@ -84,8 +84,8 @@ export default function GuidePage() {
 
   if (!ready) {
     return (
-      <Card className="neo-card">
-        <CardContent className="py-20 text-center text-sm text-black/60">Loading mentor workspace...</CardContent>
+      <Card className="border-2 border-border bg-card shadow-pixel">
+        <CardContent className="py-20 text-center text-sm text-foreground/60">Loading mentor workspace...</CardContent>
       </Card>
     );
   }
@@ -93,13 +93,13 @@ export default function GuidePage() {
   return (
     <div className="space-y-6">
       <section className="grid gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
-        <Card className="neo-card bg-[#111] text-white">
+        <Card className="border-2 border-border bg-card shadow-pixel bg-card text-card-foreground">
           <CardHeader>
-            <Badge className="bg-white text-black">Mentor</Badge>
-            <CardTitle className="font-sans text-4xl font-black uppercase tracking-[-0.05em] text-white">
+            <Badge>Mentor</Badge>
+            <CardTitle className="font-sans text-4xl font-black uppercase tracking-[-0.05em]">
               Board-grade prompts.
             </CardTitle>
-            <CardDescription className="text-base text-white/70">
+            <CardDescription className="text-base text-card-foreground/70">
               This page now queues async mentor work to the backend. Ask the question, let the background system reason on it, and wait for the signal to land.
             </CardDescription>
           </CardHeader>
@@ -108,7 +108,7 @@ export default function GuidePage() {
               <button
                 key={starter}
                 type="button"
-                className="w-full border-2 border-white bg-[#ffde59] px-4 py-4 text-left text-sm font-black uppercase tracking-[0.06em] text-black shadow-[4px_4px_0_0_#fff]"
+                className="shadow-pixel w-full border-2 border-border bg-primary px-4 py-4 text-left text-sm font-black uppercase tracking-[0.06em] text-primary-foreground"
                 onClick={() => void submit(starter)}
                 disabled={submitting}
               >
@@ -118,19 +118,19 @@ export default function GuidePage() {
           </CardContent>
         </Card>
 
-        <Card className="neo-card bg-[#dff2ff]">
+        <Card className="border-2 border-border bg-card shadow-pixel bg-card">
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="space-y-2">
                 <Badge variant="outline">Async queue</Badge>
                 <CardTitle className="font-sans text-4xl font-black uppercase tracking-[-0.05em]">Ask the mentor</CardTitle>
-                <CardDescription className="max-w-3xl text-base leading-7 text-black/70">
+                <CardDescription className="max-w-3xl text-base leading-7 text-foreground/70">
                   Your question is pushed into the backend queue, reasoned on in the background, and delivered back into the notification feed.
                 </CardDescription>
               </div>
-              <div className="neo-stat bg-white">
-                <p className="mono-label text-black/50">Recent runs</p>
-                <p className="mt-2 text-3xl font-black text-black">{runs.length}</p>
+              <div className="border-2 border-border px-4 py-4 shadow-pixel bg-background">
+                <p className="mono-label text-foreground/50">Recent runs</p>
+                <p className="mt-2 text-3xl font-black text-foreground">{runs.length}</p>
               </div>
             </div>
           </CardHeader>
@@ -146,14 +146,14 @@ export default function GuidePage() {
                 <Send className="h-4 w-4" />
                 {submitting ? "Queueing..." : "Queue Analysis"}
               </Button>
-              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-black/55">
+              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-foreground/55">
                 <TimerReset className="h-4 w-4" />
                 Delivered through notifications
               </div>
             </div>
             {status ? (
-              <div className="neo-stat bg-white">
-                <p className="text-sm leading-7 text-black/75">{status}</p>
+              <div className="border-2 border-border px-4 py-4 shadow-pixel bg-background">
+                <p className="text-sm leading-7 text-foreground/75">{status}</p>
               </div>
             ) : null}
           </CardContent>
@@ -163,15 +163,15 @@ export default function GuidePage() {
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_360px]">
         <div className="space-y-4">
           <div>
-            <p className="mono-label text-black/50">Latest mentor output</p>
-            <h2 className="mt-2 text-4xl font-black uppercase tracking-[-0.06em] text-black">Strategic feed</h2>
+            <p className="mono-label text-foreground/50">Latest mentor output</p>
+            <h2 className="mt-2 text-4xl font-black uppercase tracking-[-0.06em] text-foreground">Strategic feed</h2>
           </div>
           {mentorSignals.length === 0 ? (
-            <Card className="neo-card">
+            <Card className="border-2 border-border bg-card shadow-pixel">
               <CardContent className="space-y-4 py-16 text-center">
-                <Sparkles className="mx-auto h-10 w-10 text-black" />
-                <h3 className="text-2xl font-black uppercase text-black">Nothing returned yet</h3>
-                <p className="text-sm leading-7 text-black/65">
+                <Sparkles className="mx-auto h-10 w-10 text-foreground" />
+                <h3 className="text-2xl font-black uppercase text-foreground">Nothing returned yet</h3>
+                <p className="text-sm leading-7 text-foreground/65">
                   Queue a mentor question or wait for the weekly strategic sweep to push a note.
                 </p>
               </CardContent>
@@ -190,7 +190,7 @@ export default function GuidePage() {
           )}
         </div>
 
-        <Card className="neo-card bg-[#ffd2c2]">
+        <Card className="border-2 border-border bg-card shadow-pixel bg-card">
           <CardHeader>
             <Badge variant="outline">Run log</Badge>
             <CardTitle className="font-sans text-2xl font-black uppercase tracking-tight">
@@ -199,19 +199,19 @@ export default function GuidePage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {runs.length === 0 ? (
-              <p className="text-sm leading-7 text-black/60">No mentor runs logged yet.</p>
+              <p className="text-sm leading-7 text-foreground/60">No mentor runs logged yet.</p>
             ) : (
               runs.map((run) => (
-                <div key={run.id} className="neo-stat bg-white">
+                <div key={run.id} className="border-2 border-border px-4 py-4 shadow-pixel bg-background">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-black uppercase tracking-[0.08em] text-black">{run.agent_name}</p>
+                    <p className="text-sm font-black uppercase tracking-[0.08em] text-foreground">{run.agent_name}</p>
                     <Badge variant="outline">{run.status}</Badge>
                   </div>
-                  <p className="mt-3 text-xs uppercase tracking-[0.18em] text-black/45">
+                  <p className="mt-3 text-xs uppercase tracking-[0.18em] text-foreground/45">
                     {new Date(run.started_at).toLocaleString()}
                   </p>
                   {run.error_text ? (
-                    <p className="mt-3 inline-flex items-center gap-2 text-sm text-rose-700">
+                    <p className="mt-3 inline-flex items-center gap-2 border-2 border-border bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
                       <AlertTriangle className="h-4 w-4" />
                       {run.error_text}
                     </p>

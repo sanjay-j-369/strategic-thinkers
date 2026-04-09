@@ -33,9 +33,11 @@ interface StoredSession {
 interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
+  privateKey: CryptoKey | null;
   loading: boolean;
   isAuthenticated: boolean;
   setSession: (token: string, user: AuthUser) => void;
+  setPrivateKey: (privateKey: CryptoKey | null) => void;
   refreshSession: () => Promise<void>;
   signOut: () => void;
 }
@@ -67,6 +69,7 @@ function writeStoredSession(session: StoredSession | null) {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [privateKey, setPrivateKey] = useState<CryptoKey | null>(null);
   const [loading, setLoading] = useState(true);
 
   const setSession = useCallback((nextToken: string, nextUser: AuthUser) => {
@@ -78,6 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(() => {
     setToken(null);
     setUser(null);
+    setPrivateKey(null);
     writeStoredSession(null);
   }, []);
 
@@ -139,13 +143,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       user,
       token,
+      privateKey,
       loading,
       isAuthenticated: Boolean(user && token),
       setSession,
+      setPrivateKey,
       refreshSession,
       signOut,
     }),
-    [loading, refreshSession, setSession, signOut, token, user]
+    [loading, privateKey, refreshSession, setSession, signOut, token, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

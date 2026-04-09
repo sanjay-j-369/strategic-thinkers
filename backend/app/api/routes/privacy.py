@@ -77,17 +77,25 @@ async def get_archive_item(
         data["pii_mapping_enc"] = {
             row.token: row.encrypted_value for row in pii_rows.scalars().all()
         }
-        
-        # Reconstruct the original text by replacing the tokens with decrypted values
+        pii_scheme_rows = await session.execute(
+            select(PiiVault).where(PiiVault.user_id == user.id, PiiVault.token.in_(pii_tokens))
+        )
+        data["pii_mapping_scheme"] = {
+            row.token: row.encryption_scheme for row in pii_scheme_rows.scalars().all()
+        }
+
+        # Backward compatibility for old Fernet rows only.
         reconstructed = data["content_redacted"]
-        for token, enc_val in data["pii_mapping_enc"].items():
-            try:
-                decrypted = decrypt(str(user.id), enc_val)
-                # Replace <TOKEN> with decrypted value
-                reconstructed = reconstructed.replace(f"<{token}>", decrypted)
-            except Exception:
-                pass
-        
+        has_rsa_rows = any(
+            scheme == "rsa_oaep" for scheme in data["pii_mapping_scheme"].values()
+        )
+        if not has_rsa_rows:
+            for token, enc_val in data["pii_mapping_enc"].items():
+                try:
+                    decrypted = decrypt(str(user.id), enc_val)
+                    reconstructed = reconstructed.replace(token, decrypted)
+                except Exception:
+                    pass
         data["content"] = reconstructed
 
     return data

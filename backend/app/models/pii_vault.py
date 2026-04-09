@@ -15,3 +15,6 @@ class PiiVault(Base):
     )
     token: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
     encrypted_value: Mapped[str] = mapped_column(Text, nullable=False)
+    encryption_scheme: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="fernet"
+    )

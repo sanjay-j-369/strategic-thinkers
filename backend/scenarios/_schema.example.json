@@ -1,0 +1,27 @@
+[
+  {
+    "timestamp": "2026-04-09T09:00:00Z",
+    "source": "slack",
+    "sender": {
+      "name": "Alice Support Lead",
+      "email": "alice@example.com"
+    },
+    "channel": "#ops-war-room",
+    "body": "API latency is climbing and enterprise customers are reporting 500s.",
+    "context_tags": ["incident", "customer", "technical"],
+    "source_id": "slack-msg-001",
+    "source_url": "https://example.slack.com/archives/C123/p001"
+  },
+  {
+    "timestamp": "2026-04-09T09:03:00Z",
+    "source": "gmail",
+    "sender": {
+      "name": "Dana Investor",
+      "email": "dana@fund.com"
+    },
+    "subject": "Need updated retention metrics",
+    "body": "Can you send the latest churn and retention numbers before our partner meeting?",
+    "context_tags": ["investor", "metrics"],
+    "source_id": "gmail-msg-001"
+  }
+]

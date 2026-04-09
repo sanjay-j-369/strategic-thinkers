@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
+import { decryptPIIMapping } from "@/lib/crypto";
 import { useRequireAuth } from "@/lib/use-require-auth";
 
 interface ArchiveItem {
@@ -39,10 +40,11 @@ interface ArchiveViewResponse {
   content_redacted?: string;
   pii_tokens?: string[];
   pii_mapping_enc?: Record<string, string>;
+  pii_mapping_scheme?: Record<string, string>;
 }
 
 export default function PrivacyPage() {
-  const { ready, token } = useRequireAuth();
+  const { ready, token, privateKey } = useRequireAuth();
   const [items, setItems] = useState<ArchiveItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -52,7 +54,6 @@ export default function PrivacyPage() {
   const [viewLoading, setViewLoading] = useState(false);
   const [viewContent, setViewContent] = useState("");
   const [piiTokens, setPiiTokens] = useState<string[]>([]);
-  const [piiMappingEnc, setPiiMappingEnc] = useState<Record<string, string>>({});
   const [viewItem, setViewItem] = useState<ArchiveItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ArchiveItem | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -90,7 +91,6 @@ export default function PrivacyPage() {
     setViewItem(item);
     setViewContent("");
     setPiiTokens([]);
-    setPiiMappingEnc({});
     setViewOpen(true);
     setViewLoading(true);
 
@@ -98,11 +98,33 @@ export default function PrivacyPage() {
       const data = await apiFetch<ArchiveViewResponse>(`/api/archive/${item.id}`, {
         token,
       });
-      setViewContent(data.content || data.content_redacted || "No content available");
+      const redactedContent = data.content_redacted || data.content || "No content available";
+      const scheme = data.pii_mapping_scheme || {};
+      const encrypted = data.pii_mapping_enc || {};
+      const rsaMapping: Record<string, string> = Object.fromEntries(
+        Object.entries(encrypted).filter(([tokenKey]) => scheme[tokenKey] === "rsa_oaep")
+      );
+
+      if (Object.keys(rsaMapping).length > 0) {
+        if (!privateKey) {
+          throw new Error("Private key unavailable in memory. Sign in again to unlock content.");
+        }
+        const decryptedMapping = await decryptPIIMapping(rsaMapping, privateKey);
+        let reconstructed = redactedContent;
+        for (const [tokenKey, plainValue] of Object.entries(decryptedMapping)) {
+          reconstructed = reconstructed.replaceAll(tokenKey, plainValue);
+        }
+        setViewContent(reconstructed);
+      } else {
+        // Legacy rows may still be reconstructed server-side.
+        setViewContent(data.content || redactedContent);
+      }
       setPiiTokens(data.pii_tokens || []);
-      setPiiMappingEnc(data.pii_mapping_enc || {});
-    } catch {
+    } catch (err) {
       setViewContent("Unable to load archived content.");
+      if (err instanceof Error) {
+        setNotice(err.message);
+      }
     } finally {
       setViewLoading(false);
     }

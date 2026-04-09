@@ -9,11 +9,20 @@ from app.agentic.context import list_user_ids
 from app.agentic.mentor.service import run_mentor_review
 from app.agentic.persistence import finish_agent_run, save_drafts, save_notification, save_promise_items, start_agent_run
 from app.agentic.workers.service import run_worker_lane
+from app.observability import emit_demo_log_async
 from app.runtime.founder_processing import process_founder_event_sync
 from app.runtime.task_names import TaskNames
 
 
 async def founder_event_handler(app: FastAPI, payload: dict) -> dict:
+    await emit_demo_log_async(
+        user_id=payload["event"]["metadata"]["user_id"],
+        message="[Task Runner] Founder event dequeued for processing.",
+        pillar="SYSTEM",
+        agent_name="Task Runner",
+        event_type="pipeline_log",
+        step="dequeued",
+    )
     result = await asyncio.to_thread(process_founder_event_sync, payload["event"])
     await _publish_notifications(app, payload["event"]["metadata"]["user_id"], result.get("notifications", []))
     return result
