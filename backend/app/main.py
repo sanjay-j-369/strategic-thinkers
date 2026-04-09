@@ -1,52 +1,27 @@
-import json
-import asyncio
 from contextlib import asynccontextmanager
 
-import redis.asyncio as aioredis
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
-from app.config import settings
-from app.models.base import Base
 from app.api.ws import manager
-from app.api.routes import auth, summaries, guide, privacy, simulate, ingest, meetings, chat, demo
+from app.api.routes import auth, summaries, guide, privacy, simulate, ingest, meetings, chat, demo, ops
+from app.config import settings
+from app.db import build_async_engine, build_session_factory, init_database
+from app.runtime.notifier import InMemoryNotificationBus
+from app.runtime.queue import PostgresTaskQueue, PostgresTaskRunner
+from app.runtime.scheduler import create_scheduler
+from app.runtime.task_handlers import get_task_handlers
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # DB init
-    engine = create_async_engine(settings.DATABASE_URL, echo=False)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        await conn.exec_driver_sql(
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(255)"
-        )
-        await conn.exec_driver_sql(
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT"
-        )
-        await conn.exec_driver_sql(
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS slack_team_id VARCHAR(255)"
-        )
-        await conn.exec_driver_sql(
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS slack_channel_ids TEXT"
-        )
-        await conn.exec_driver_sql(
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS google_last_synced_at TIMESTAMP WITH TIME ZONE"
-        )
-        await conn.exec_driver_sql(
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS slack_last_synced_at TIMESTAMP WITH TIME ZONE"
-        )
-        await conn.exec_driver_sql(
-            "ALTER TABLE summaries ADD COLUMN IF NOT EXISTS source_ref VARCHAR(255)"
-        )
-        await conn.exec_driver_sql(
-            "ALTER TABLE archive ADD COLUMN IF NOT EXISTS content_redacted TEXT"
-        )
-        await conn.exec_driver_sql(
-            "ALTER TABLE archive ADD COLUMN IF NOT EXISTS pii_tokens JSONB"
-        )
-    app.state.async_session = async_sessionmaker(engine, expire_on_commit=False)
+    engine = build_async_engine()
+    await init_database(engine)
+    app.state.async_session = build_session_factory(engine)
+    app.state.task_queue = PostgresTaskQueue(app.state.async_session)
+    app.state.notification_bus = InMemoryNotificationBus(manager)
+    app.state.task_runner = PostgresTaskRunner(app, app.state.task_queue, get_task_handlers())
+    app.state.scheduler = create_scheduler(app)
 
     if settings.DEMO_MODE:
         try:
@@ -56,32 +31,15 @@ async def lifespan(app: FastAPI):
         except Exception as exc:
             print(f"[Demo] Persona bootstrap failed: {exc}")
 
-    # Redis pub/sub listener
-    redis_client = aioredis.from_url(settings.REDIS_URL)
-    pubsub = redis_client.pubsub()
-    await pubsub.psubscribe("founder:*")
-
-    async def redis_listener():
-        async for message in pubsub.listen():
-            if message["type"] == "pmessage":
-                channel = message["channel"]
-                if isinstance(channel, bytes):
-                    channel = channel.decode()
-                # channel format: "founder:{user_id}"
-                user_id = channel.split(":", 1)[-1]
-                try:
-                    data = json.loads(message["data"])
-                    await manager.send_to_user(user_id, data)
-                except Exception:
-                    pass
-
-    listener_task = asyncio.create_task(redis_listener())
+    await app.state.notification_bus.start()
+    await app.state.task_runner.start()
+    app.state.scheduler.start()
 
     yield
 
-    listener_task.cancel()
-    await pubsub.close()
-    await redis_client.aclose()
+    app.state.scheduler.shutdown(wait=False)
+    await app.state.task_runner.stop()
+    await app.state.notification_bus.stop()
     await engine.dispose()
 
 
@@ -104,6 +62,7 @@ app.include_router(ingest.router)
 app.include_router(meetings.router)
 app.include_router(chat.router)
 app.include_router(demo.router)
+app.include_router(ops.router)
 
 
 @app.websocket("/ws/{user_id}")
@@ -114,7 +73,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
             # Keep connection alive; messages are pushed from Redis listener
             await websocket.receive_text()
     except WebSocketDisconnect:
-        manager.disconnect(user_id)
+        manager.disconnect(user_id, websocket)
 
 
 @app.get("/health")

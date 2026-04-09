@@ -1,10 +1,11 @@
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, Request, Query
+from fastapi import APIRouter, BackgroundTasks, Request, Query
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy import select
 
+from app.runtime.task_names import TaskNames
 from app.security import resolve_user
 
 router = APIRouter(prefix="/api/meetings", tags=["meetings"])
@@ -18,12 +19,11 @@ class MeetingRequest(BaseModel):
 
 
 @router.post("")
-async def schedule_meeting(body: MeetingRequest, request: Request):
+async def schedule_meeting(body: MeetingRequest, request: Request, background_tasks: BackgroundTasks):
     from app.models.summary import Summary
     from app.schemas.events import (
         FounderEvent, FounderEventMetadata, FounderEventPayload, TaskType, Source
     )
-    from app.workers.celery_app import celery_app
 
     user = await resolve_user(request, user_id=body.user_id)
     scheduled_at = body.scheduled_at or datetime.now(timezone.utc).isoformat()
@@ -60,7 +60,22 @@ async def schedule_meeting(body: MeetingRequest, request: Request):
             source_id=f"manual-meeting:{meeting_id}",
         ),
     )
-    celery_app.send_task("process_founder_event", args=[event.model_dump(mode="json")], priority=1)
+    await request.app.state.task_queue.enqueue(
+        TaskNames.FOUNDER_EVENT,
+        {"event": event.model_dump(mode="json")},
+        priority=1,
+    )
+    background_tasks.add_task(
+        request.app.state.notification_bus.publish_to_user,
+        str(user.id),
+        {
+            "notification_type": "TASK_QUEUED",
+            "severity": "info",
+            "title": "Meeting prep requested",
+            "body": body.topic,
+            "payload": {"meeting_id": meeting_id},
+        },
+    )
 
     return {"status": "scheduled", "id": meeting_id}
 

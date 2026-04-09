@@ -2,13 +2,13 @@ import uuid
 import random
 from datetime import datetime, timezone
 
-from app.workers.celery_app import celery_app
+from app.runtime.queue import enqueue_task_sync
+from app.runtime.task_names import TaskNames
 from app.schemas.events import FounderEvent, FounderEventMetadata, FounderEventPayload, TaskType, Source
 from app.ingestion.simulator.fixtures import FAKE_MEETINGS
 from app.ingestion.simulator.config import SIM_CONFIG
 
 
-@celery_app.task(name="poll_calendar_simulated")
 def poll_calendar_simulated(user_id: str | None = None):
     """Emit a fake ASSISTANT_PREP event simulating an upcoming meeting."""
     uid = user_id or str(uuid.uuid4())
@@ -32,9 +32,9 @@ def poll_calendar_simulated(user_id: str | None = None):
         ),
     )
 
-    celery_app.send_task(
-        "process_founder_event",
-        args=[event.model_dump(mode="json")],
+    enqueue_task_sync(
+        TaskNames.FOUNDER_EVENT,
+        {"event": event.model_dump(mode="json")},
         priority=1,
     )
     return event.model_dump(mode="json")

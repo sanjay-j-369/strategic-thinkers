@@ -88,8 +88,8 @@ export function DemoControls() {
       ) : null}
 
       {open ? (
-        <div className="fixed inset-y-0 right-0 z-[70] w-full max-w-sm border-l border-white/10 bg-black/90 p-4 shadow-2xl backdrop-blur-xl">
-          <Card className="h-full border-white/10 bg-zinc-950/90">
+        <div className="fixed inset-y-0 right-0 z-[70] w-full max-w-sm border-l border-border bg-card p-4 shadow-2xl backdrop-blur-xl">
+          <Card className="h-full border-border bg-zinc-950/90">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="space-y-2">
@@ -195,12 +195,12 @@ export function DemoControls() {
               </Button>
 
               {status ? (
-                <p className="rounded-[16px] border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-zinc-300">
+                <p className="rounded-xl border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
                   {status}
                 </p>
               ) : null}
               {error ? (
-                <p className="rounded-[16px] border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-zinc-400">
+                <p className="rounded-xl border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
                   {error}
                 </p>
               ) : null}

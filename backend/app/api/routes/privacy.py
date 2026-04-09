@@ -1,6 +1,7 @@
 import os
 from fastapi import APIRouter, Request, Query, HTTPException
 from sqlalchemy import func, select
+from app.pipeline.encryption import decrypt
 
 from app.models.archive import Archive
 from app.models.pii_vault import PiiVault
@@ -76,6 +77,19 @@ async def get_archive_item(
         data["pii_mapping_enc"] = {
             row.token: row.encrypted_value for row in pii_rows.scalars().all()
         }
+        
+        # Reconstruct the original text by replacing the tokens with decrypted values
+        reconstructed = data["content_redacted"]
+        for token, enc_val in data["pii_mapping_enc"].items():
+            try:
+                decrypted = decrypt(str(user.id), enc_val)
+                # Replace <TOKEN> with decrypted value
+                reconstructed = reconstructed.replace(f"<{token}>", decrypted)
+            except Exception:
+                pass
+        
+        data["content"] = reconstructed
+
     return data
 
 

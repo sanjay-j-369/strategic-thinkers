@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
+import type { SignalItem } from "@/components/SignalCard";
 
 const WS_BASE_URL =
   process.env.NEXT_PUBLIC_WS_URL ||
@@ -9,59 +10,24 @@ const WS_BASE_URL =
     "ws"
   );
 
-interface SummaryItem {
-  id: string;
-  type: string;
-  topic?: string;
-  summary_text?: string;
-  generated_at: string;
-  payload?: Record<string, unknown>;
-}
-
-function toCard(summary: SummaryItem): any | null {
-  const payload = summary.payload;
-
-  if (payload && typeof payload === "object" && "type" in payload) {
-    return payload;
-  }
-
-  if (summary.type === "ASSISTANT_PREP") {
-    return {
-      type: "ASSISTANT_PREP",
-      topic: summary.topic || "Meeting",
-      summary: summary.summary_text || "",
-      generated_at: summary.generated_at,
-    };
-  }
-
-  if (summary.type === "GUIDE_QUERY" || summary.type === "GUIDE_MILESTONE") {
-    return {
-      type: "GUIDE_QUERY",
-      question: summary.topic || "Strategic insight",
-      output: summary.summary_text || "",
-      generated_at: summary.generated_at,
-    };
-  }
-
-  return null;
-}
-
-function mergeCards(current: any[], incoming: any[]) {
+function mergeSignals(current: SignalItem[], incoming: SignalItem[]) {
   const seen = new Set<string>();
   const merged = [...incoming, ...current].filter((card) => {
-    const key = `${card.type}-${card.generated_at}-${card.topic || card.question || ""}`;
+    const key = card.id || `${card.notification_type || card.type}-${card.created_at || card.generated_at}-${card.title || ""}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
 
   return merged.sort(
-    (a, b) => new Date(b.generated_at).getTime() - new Date(a.generated_at).getTime()
+    (a, b) =>
+      new Date(b.created_at || b.generated_at || 0).getTime() -
+      new Date(a.created_at || a.generated_at || 0).getTime()
   );
 }
 
 export function useFounderFeed(userId: string, token?: string | null) {
-  const [cards, setCards] = useState<any[]>([]);
+  const [cards, setCards] = useState<SignalItem[]>([]);
   const ws = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -71,15 +37,12 @@ export function useFounderFeed(userId: string, token?: string | null) {
 
     async function loadSummaries() {
       try {
-        const data = await apiFetch<{ summaries: SummaryItem[] }>(
-          "/api/summaries?limit=40",
+        const data = await apiFetch<{ items: SignalItem[] }>(
+          "/api/ops/notifications?limit=50",
           { token }
         );
         if (!mounted) return;
-        const fetched = (data.summaries || [])
-          .map((item) => toCard(item))
-          .filter(Boolean) as any[];
-        setCards((prev) => mergeCards(prev, fetched));
+        setCards((prev) => mergeSignals(prev, data.items || []));
       } catch {
         // Keep existing cards; websocket may still deliver live items.
       }
@@ -108,12 +71,12 @@ export function useFounderFeed(userId: string, token?: string | null) {
       ws.current = new WebSocket(`${WS_BASE_URL}/ws/${userId}`);
 
       ws.current.onmessage = (event) => {
-        const card = JSON.parse(event.data);
+        const card = JSON.parse(event.data) as SignalItem & { type?: string };
         if (card?.type === "DEMO_RESET") {
           setCards([]);
           return;
         }
-        setCards((prev) => mergeCards(prev, [card]));
+        setCards((prev) => mergeSignals(prev, [card]));
       };
 
       ws.current.onerror = () => console.warn("WS error, retrying...");

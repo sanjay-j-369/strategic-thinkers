@@ -1,245 +1,227 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { Bot, LoaderCircle, Send, Sparkles, UserCircle2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import { AlertTriangle, Send, Sparkles, TimerReset } from "lucide-react";
 
+import { SignalCard, type SignalItem } from "@/components/SignalCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/api";
 import { useRequireAuth } from "@/lib/use-require-auth";
+import { useFounderFeed } from "@/lib/websocket";
 
 const STARTERS = [
-  "Should I hire a CTO now or keep outsourcing?",
-  "We have 4 months runway. Raise or cut costs?",
-  "Our MRR is $8k and an investor wants Series A terms. Too early?",
-  "Should I hire sales before product-market fit?",
+  "Should I hire a customer success lead this quarter?",
+  "Runway dropped. What should I cut first without stalling growth?",
+  "Are we operating like a seed company or pretending to be Series A already?",
+  "What is the highest-leverage founder bottleneck visible in the last week?",
 ];
 
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-}
+export default function GuidePage() {
+  const { ready, token, user } = useRequireAuth();
+  const [question, setQuestion] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [runs, setRuns] = useState<any[]>([]);
+  const signals = useFounderFeed(user?.id ?? "", token);
 
-export default function ChatPage() {
-  const { ready, token } = useRequireAuth();
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: "assistant",
-      content:
-        "I have context from your emails, Slack, and meetings. Ask for a decision memo, a risk readout, or a tactical next move.",
-    },
-  ]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const mentorSignals = useMemo(
+    () =>
+      signals.filter(
+        (item) =>
+          item.pillar === "MENTOR" ||
+          item.notification_type === "GUIDE_QUERY" ||
+          item.notification_type === "GUIDE_MILESTONE" ||
+          item.notification_type === "RUNWAY_ALERT" ||
+          item.notification_type === "HIRING_TRIGGER" ||
+          item.notification_type === "BURNOUT_ALERT"
+      ),
+    [signals]
+  );
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (!ready || !token) return;
+    let mounted = true;
+    async function loadRuns() {
+      try {
+        const data = await apiFetch<{ items: any[] }>("/api/ops/runs?pillar=MENTOR&limit=8", { token });
+        if (mounted) setRuns(data.items || []);
+      } catch {
+        if (mounted) setRuns([]);
+      }
+    }
+    void loadRuns();
+    const timer = setInterval(() => void loadRuns(), 8000);
+    return () => {
+      mounted = false;
+      clearInterval(timer);
+    };
+  }, [ready, token]);
 
-  async function send(text?: string) {
-    const message = text || input.trim();
-    if (!message || loading || !token) return;
-
-    const userMessage: Message = { role: "user", content: message };
-    const nextMessages = [...messages, userMessage];
-    setMessages(nextMessages);
-    setInput("");
-    setLoading(true);
-
+  async function submit(nextQuestion?: string) {
+    const prompt = (nextQuestion || question).trim();
+    if (!prompt || !token || submitting) return;
+    setSubmitting(true);
+    setStatus(null);
     try {
-      const data = await apiFetch<{ reply: string }>("/api/chat", {
+      const data = await apiFetch<{ task_id: string; trace_id: string }>("/api/guide", {
         method: "POST",
         token,
-        json: {
-          message,
-          history: nextMessages
-            .slice(-10)
-            .map((entry) => ({ role: entry.role, content: entry.content })),
-        },
+        json: { question: prompt },
       });
-      setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: "Something went wrong. Try again.",
-        },
-      ]);
+      setStatus(`Queued mentor analysis. Task ${data.task_id.slice(0, 8)} is running in the background.`);
+      setQuestion("");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Failed to queue mentor analysis.");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   }
 
   if (!ready) {
     return (
-      <Card>
-        <CardContent className="py-20 text-center text-sm text-zinc-500">
-          Loading guide workspace...
-        </CardContent>
+      <Card className="neo-card">
+        <CardContent className="py-20 text-center text-sm text-black/60">Loading mentor workspace...</CardContent>
       </Card>
     );
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-      <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}>
-        <Card className="h-full">
+    <div className="space-y-6">
+      <section className="grid gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
+        <Card className="neo-card bg-[#111] text-white">
           <CardHeader>
-            <Badge className="w-fit">Strategic AI Advisor</Badge>
-            <CardTitle className="text-3xl">Ask for the next best move.</CardTitle>
-            <CardDescription>
-              The guide reads your operational context and answers in memo form, not generic chat filler.
+            <Badge className="bg-white text-black">Mentor</Badge>
+            <CardTitle className="font-sans text-4xl font-black uppercase tracking-[-0.05em] text-white">
+              Board-grade prompts.
+            </CardTitle>
+            <CardDescription className="text-base text-white/70">
+              This page now queues async mentor work to the backend. Ask the question, let the background system reason on it, and wait for the signal to land.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <p className="mono-label">Starter Prompts</p>
-              {STARTERS.map((starter) => (
-                <Button
-                  key={starter}
-                  variant="secondary"
-                  className="h-auto w-full justify-start whitespace-normal rounded-[22px] px-4 py-4 text-left leading-6"
-                  onClick={() => send(starter)}
-                  disabled={loading}
-                >
-                  <Sparkles className="mt-1 h-4 w-4 shrink-0" />
-                  <span>{starter}</span>
-                </Button>
-              ))}
-            </div>
-
-            <div className="rounded-[24px] border border-white/10 bg-black/30 p-4">
-              <p className="mono-label mb-2">What It Knows</p>
-              <p className="text-sm leading-7 text-zinc-400">
-                Recent archive entries, scheduled meetings, and context retrieved from memory before each answer.
-              </p>
-            </div>
+          <CardContent className="space-y-3">
+            {STARTERS.map((starter) => (
+              <button
+                key={starter}
+                type="button"
+                className="w-full border-2 border-white bg-[#ffde59] px-4 py-4 text-left text-sm font-black uppercase tracking-[0.06em] text-black shadow-[4px_4px_0_0_#fff]"
+                onClick={() => void submit(starter)}
+                disabled={submitting}
+              >
+                {starter}
+              </button>
+            ))}
           </CardContent>
         </Card>
-      </motion.div>
 
-      <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}>
-        <Card className="overflow-hidden">
-          <CardHeader className="border-b border-white/10 pb-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <Card className="neo-card bg-[#dff2ff]">
+          <CardHeader>
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="space-y-2">
-                <Badge variant="secondary" className="w-fit">
-                  Live Conversation
-                </Badge>
-                <CardTitle className="text-3xl">Guide workspace</CardTitle>
-                <CardDescription>
-                  Ask sharp questions. The assistant answers using your founder context, not canned frameworks.
+                <Badge variant="outline">Async queue</Badge>
+                <CardTitle className="font-sans text-4xl font-black uppercase tracking-[-0.05em]">Ask the mentor</CardTitle>
+                <CardDescription className="max-w-3xl text-base leading-7 text-black/70">
+                  Your question is pushed into the backend queue, reasoned on in the background, and delivered back into the notification feed.
                 </CardDescription>
               </div>
-              <div className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-[11px] font-mono uppercase tracking-[0.24em] text-zinc-500">
-                {loading ? "Thinking" : "Ready"}
+              <div className="neo-stat bg-white">
+                <p className="mono-label text-black/50">Recent runs</p>
+                <p className="mt-2 text-3xl font-black text-black">{runs.length}</p>
               </div>
             </div>
           </CardHeader>
-
-          <CardContent className="flex h-[calc(100vh-14rem)] flex-col pt-6">
-            <div className="flex-1 space-y-4 overflow-y-auto pr-2">
-              <AnimatePresence initial={false}>
-                {messages.map((message, index) => {
-                  const isUser = message.role === "user";
-
-                  return (
-                    <motion.div
-                      key={`${message.role}-${index}-${message.content.slice(0, 20)}`}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className={`flex ${isUser ? "justify-end" : "justify-start"}`}
-                    >
-                      <div
-                        className={`chat-bubble max-w-[86%] ${
-                          isUser ? "chat-bubble-user" : "chat-bubble-assistant"
-                        }`}
-                      >
-                        <div className="mb-3 flex items-center gap-2 text-xs uppercase tracking-[0.24em]">
-                          {isUser ? (
-                            <>
-                              <UserCircle2 className="h-4 w-4" />
-                              <span>User</span>
-                            </>
-                          ) : (
-                            <>
-                              <Bot className="h-4 w-4" />
-                              <span>Guide</span>
-                            </>
-                          )}
-                        </div>
-                        <p className="whitespace-pre-wrap">{message.content}</p>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-
-                {loading ? (
-                  <motion.div
-                    key="loading"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex justify-start"
-                  >
-                    <div className="chat-bubble chat-bubble-assistant flex items-center gap-3">
-                      <LoaderCircle className="h-4 w-4 animate-spin text-zinc-300" />
-                      <span className="text-sm text-zinc-400">
-                        Synthesizing a response from the latest context.
-                      </span>
-                    </div>
-                  </motion.div>
-                ) : null}
-              </AnimatePresence>
-              <div ref={bottomRef} />
-            </div>
-
-            <div className="mt-6 rounded-[28px] border border-white/10 bg-black/40 p-2">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center">
-                <Input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && send()}
-                  placeholder="Ask a strategic question..."
-                  disabled={loading}
-                  className="h-12 flex-1 border-0 bg-transparent px-4 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                />
-                <div className="flex items-center justify-between gap-3 md:justify-end">
-                  <Badge variant="secondary" className="hidden md:inline-flex">
-                    Founder context attached
-                  </Badge>
-                  <Button
-                    onClick={() => send()}
-                    disabled={loading || !input.trim()}
-                    size="lg"
-                    className="w-full md:w-auto"
-                  >
-                    {loading ? (
-                      <LoaderCircle className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
-                    Send
-                  </Button>
-                </div>
+          <CardContent className="space-y-4">
+            <Textarea
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              placeholder="What strategic issue should the board member analyze next?"
+              className="min-h-[170px]"
+            />
+            <div className="flex flex-wrap items-center gap-3">
+              <Button size="lg" onClick={() => void submit()} disabled={submitting || !question.trim()}>
+                <Send className="h-4 w-4" />
+                {submitting ? "Queueing..." : "Queue Analysis"}
+              </Button>
+              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-black/55">
+                <TimerReset className="h-4 w-4" />
+                Delivered through notifications
               </div>
             </div>
+            {status ? (
+              <div className="neo-stat bg-white">
+                <p className="text-sm leading-7 text-black/75">{status}</p>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
-      </motion.div>
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_360px]">
+        <div className="space-y-4">
+          <div>
+            <p className="mono-label text-black/50">Latest mentor output</p>
+            <h2 className="mt-2 text-4xl font-black uppercase tracking-[-0.06em] text-black">Strategic feed</h2>
+          </div>
+          {mentorSignals.length === 0 ? (
+            <Card className="neo-card">
+              <CardContent className="space-y-4 py-16 text-center">
+                <Sparkles className="mx-auto h-10 w-10 text-black" />
+                <h3 className="text-2xl font-black uppercase text-black">Nothing returned yet</h3>
+                <p className="text-sm leading-7 text-black/65">
+                  Queue a mentor question or wait for the weekly strategic sweep to push a note.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            mentorSignals.slice(0, 8).map((signal, index) => (
+              <motion.div
+                key={signal.id || `${signal.notification_type}-${signal.created_at}-${index}`}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.24, delay: index * 0.03 }}
+              >
+                <SignalCard signal={signal as SignalItem} />
+              </motion.div>
+            ))
+          )}
+        </div>
+
+        <Card className="neo-card bg-[#ffd2c2]">
+          <CardHeader>
+            <Badge variant="outline">Run log</Badge>
+            <CardTitle className="font-sans text-2xl font-black uppercase tracking-tight">
+              Recent mentor executions
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {runs.length === 0 ? (
+              <p className="text-sm leading-7 text-black/60">No mentor runs logged yet.</p>
+            ) : (
+              runs.map((run) => (
+                <div key={run.id} className="neo-stat bg-white">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-black uppercase tracking-[0.08em] text-black">{run.agent_name}</p>
+                    <Badge variant="outline">{run.status}</Badge>
+                  </div>
+                  <p className="mt-3 text-xs uppercase tracking-[0.18em] text-black/45">
+                    {new Date(run.started_at).toLocaleString()}
+                  </p>
+                  {run.error_text ? (
+                    <p className="mt-3 inline-flex items-center gap-2 text-sm text-rose-700">
+                      <AlertTriangle className="h-4 w-4" />
+                      {run.error_text}
+                    </p>
+                  ) : null}
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </section>
     </div>
   );
 }

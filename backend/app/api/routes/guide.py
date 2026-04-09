@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, BackgroundTasks, Request
 from pydantic import BaseModel
 
+from app.runtime.task_names import TaskNames
 from app.security import resolve_user
 from app.schemas.events import FounderEvent, FounderEventMetadata, FounderEventPayload, TaskType, Source
 
@@ -15,10 +16,8 @@ class GuideRequest(BaseModel):
 
 
 @router.post("")
-async def ask_guide(body: GuideRequest, request: Request):
+async def ask_guide(body: GuideRequest, request: Request, background_tasks: BackgroundTasks):
     """Enqueue a GUIDE_QUERY task and return the task_id."""
-    from app.workers.celery_app import celery_app
-
     user = await resolve_user(request, user_id=body.user_id)
     trace_id = str(uuid.uuid4())
 
@@ -38,10 +37,21 @@ async def ask_guide(body: GuideRequest, request: Request):
         ),
     )
 
-    task = celery_app.send_task(
-        "process_founder_event",
-        args=[event.model_dump(mode="json")],
+    task_id = await request.app.state.task_queue.enqueue(
+        TaskNames.FOUNDER_EVENT,
+        {"event": event.model_dump(mode="json")},
         priority=2,
     )
+    background_tasks.add_task(
+        request.app.state.notification_bus.publish_to_user,
+        str(user.id),
+        {
+            "notification_type": "TASK_QUEUED",
+            "severity": "info",
+            "title": "Guide request queued",
+            "body": body.question[:180],
+            "payload": {"trace_id": trace_id, "task_id": task_id},
+        },
+    )
 
-    return {"task_id": task.id, "trace_id": trace_id}
+    return {"task_id": task_id, "trace_id": trace_id}

@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, BackgroundTasks, Request
 from pydantic import BaseModel
 
+from app.runtime.task_names import TaskNames
 from app.security import resolve_user
 from app.schemas.events import (
     FounderEvent, FounderEventMetadata, FounderEventPayload, TaskType, Source
@@ -26,8 +27,7 @@ class SlackIngestRequest(BaseModel):
 
 
 @router.post("/email")
-async def ingest_email(body: EmailIngestRequest, request: Request):
-    from app.workers.celery_app import celery_app
+async def ingest_email(body: EmailIngestRequest, request: Request, background_tasks: BackgroundTasks):
     user = await resolve_user(request, user_id=body.user_id)
 
     content = f"Subject: {body.subject}\nFrom: {body.from_address}\n\n{body.body}"
@@ -48,13 +48,27 @@ async def ingest_email(body: EmailIngestRequest, request: Request):
             is_action_item=detect_action_item_signal(content, ["email"]),
         ),
     )
-    celery_app.send_task("process_founder_event", args=[event.model_dump(mode="json")], priority=3)
+    await request.app.state.task_queue.enqueue(
+        TaskNames.FOUNDER_EVENT,
+        {"event": event.model_dump(mode="json")},
+        priority=3,
+    )
+    background_tasks.add_task(
+        request.app.state.notification_bus.publish_to_user,
+        str(user.id),
+        {
+            "notification_type": "TASK_QUEUED",
+            "severity": "info",
+            "title": "Email queued for ingestion",
+            "body": body.subject[:180],
+            "payload": {"trace_id": event.metadata.trace_id},
+        },
+    )
     return {"status": "queued", "trace_id": event.metadata.trace_id}
 
 
 @router.post("/slack")
-async def ingest_slack(body: SlackIngestRequest, request: Request):
-    from app.workers.celery_app import celery_app
+async def ingest_slack(body: SlackIngestRequest, request: Request, background_tasks: BackgroundTasks):
     user = await resolve_user(request, user_id=body.user_id)
 
     channel = body.channel if body.channel.startswith("#") else f"#{body.channel}"
@@ -76,5 +90,20 @@ async def ingest_slack(body: SlackIngestRequest, request: Request):
             is_action_item=detect_action_item_signal(content, ["slack"]),
         ),
     )
-    celery_app.send_task("process_founder_event", args=[event.model_dump(mode="json")], priority=3)
+    await request.app.state.task_queue.enqueue(
+        TaskNames.FOUNDER_EVENT,
+        {"event": event.model_dump(mode="json")},
+        priority=3,
+    )
+    background_tasks.add_task(
+        request.app.state.notification_bus.publish_to_user,
+        str(user.id),
+        {
+            "notification_type": "TASK_QUEUED",
+            "severity": "info",
+            "title": "Slack message queued for ingestion",
+            "body": channel,
+            "payload": {"trace_id": event.metadata.trace_id},
+        },
+    )
     return {"status": "queued", "trace_id": event.metadata.trace_id}

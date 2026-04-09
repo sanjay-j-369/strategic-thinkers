@@ -4,104 +4,108 @@
 
 @layer base {
   :root {
-    --font-sans: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
-    --font-mono: "SF Mono", "Menlo", "Monaco", monospace;
-    --background: 0 0% 98%;
-    --foreground: 222 47% 11%;
+    --background: 42 100% 96%;
+    --foreground: 0 0% 6%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 0 0% 6%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 222 47% 11%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 8% 42%;
-    --accent: 220 14% 93%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 62% 42%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 220 13% 88%;
-    --input: 220 13% 88%;
-    --ring: 222 47% 20%;
-    --radius: 1rem;
+    --popover-foreground: 0 0% 6%;
+    --primary: 352 100% 62%;
+    --primary-foreground: 0 0% 6%;
+    --secondary: 194 100% 88%;
+    --secondary-foreground: 0 0% 6%;
+    --muted: 48 100% 84%;
+    --muted-foreground: 0 0% 32%;
+    --accent: 83 100% 74%;
+    --accent-foreground: 0 0% 6%;
+    --destructive: 11 100% 63%;
+    --destructive-foreground: 0 0% 6%;
+    --border: 0 0% 6%;
+    --input: 0 0% 6%;
+    --ring: 0 0% 6%;
   }
 
   .dark {
-    --background: 0 0% 3%;
-    --foreground: 0 0% 97%;
-    --card: 0 0% 8%;
-    --card-foreground: 0 0% 97%;
-    --popover: 0 0% 6%;
-    --popover-foreground: 0 0% 97%;
-    --primary: 0 0% 97%;
-    --primary-foreground: 0 0% 5%;
-    --secondary: 0 0% 12%;
-    --secondary-foreground: 0 0% 97%;
-    --muted: 0 0% 11%;
-    --muted-foreground: 0 0% 61%;
-    --accent: 0 0% 15%;
-    --accent-foreground: 0 0% 97%;
-    --destructive: 0 0% 10%;
-    --destructive-foreground: 0 0% 97%;
-    --border: 0 0% 18%;
-    --input: 0 0% 16%;
-    --ring: 0 0% 80%;
-    --radius: 1rem;
+    --background: 48 24% 10%;
+    --foreground: 48 100% 96%;
+    --card: 48 20% 14%;
+    --card-foreground: 48 100% 96%;
+    --popover: 48 20% 14%;
+    --popover-foreground: 48 100% 96%;
+    --primary: 352 100% 62%;
+    --primary-foreground: 0 0% 6%;
+    --secondary: 194 58% 24%;
+    --secondary-foreground: 48 100% 96%;
+    --muted: 48 16% 19%;
+    --muted-foreground: 48 20% 70%;
+    --accent: 83 53% 31%;
+    --accent-foreground: 48 100% 96%;
+    --destructive: 11 92% 60%;
+    --destructive-foreground: 0 0% 6%;
+    --border: 48 100% 96%;
+    --input: 48 100% 96%;
+    --ring: 48 100% 96%;
   }
 
   * {
     @apply border-border;
   }
 
-  html.dark {
-    color-scheme: dark;
-  }
-
   html.light {
     color-scheme: light;
   }
 
+  html.dark {
+    color-scheme: dark;
+  }
+
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    background-image:
+      linear-gradient(to right, rgba(0, 0, 0, 0.08) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(0, 0, 0, 0.08) 1px, transparent 1px);
+    background-size: 24px 24px;
     text-rendering: optimizeLegibility;
   }
 
   h1,
   h2,
   h3,
-  h4 {
-    @apply tracking-[-0.03em];
+  h4,
+  h5,
+  h6 {
+    @apply font-pixel font-normal tracking-wide;
   }
 
   ::selection {
-    background: rgba(59, 130, 246, 0.2);
+    background: rgba(255, 97, 119, 0.35);
     color: inherit;
   }
 }
 
 @layer components {
   .mono-label {
-    @apply font-mono text-[11px] uppercase tracking-[0.24em] text-muted-foreground;
+    @apply font-pixel text-[12px] uppercase tracking-widest;
+  }
+
+  .neo-card {
+    @apply border-2 border-black bg-card shadow-[8px_8px_0_0_#000];
+  }
+
+  .neo-stat {
+    @apply border-2 border-black px-4 py-4 shadow-[4px_4px_0_0_#000];
   }
 
   .chat-bubble {
-    @apply rounded-2xl border px-4 py-4 text-sm leading-7 shadow-sm;
+    @apply border-2 border-black px-5 py-4 text-base leading-7 shadow-[6px_6px_0_0_#000] transition-transform;
   }
 
   .chat-bubble-assistant {
-    @apply border-border bg-card text-card-foreground;
+    @apply bg-card text-card-foreground;
   }
 
   .chat-bubble-user {
-    @apply border-border bg-primary text-primary-foreground;
-  }
-
-  .theme-surface {
-    background:
-      radial-gradient(circle at top, hsl(var(--foreground) / 0.05), transparent 28%),
-      linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--background)) 100%);
+    @apply bg-primary text-primary-foreground;
   }
 }
 
@@ -115,14 +119,9 @@ textarea {
   resize: vertical;
 }
 
-html.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-  filter: invert(1);
-  opacity: 0.75;
-}
-
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
 }
 
 ::-webkit-scrollbar-track {
@@ -130,46 +129,10 @@ html.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 }
 
 ::-webkit-scrollbar-thumb {
-  border-radius: 9999px;
-  background: hsl(var(--border));
-  border: 2px solid transparent;
-  background-clip: padding-box;
+  background: #000;
+  border: 2px solid hsl(var(--background));
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.45);
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
-/* Light mode compatibility overrides for existing hardcoded dark utility classes */
-html.light .text-white {
-  color: hsl(var(--foreground)) !important;
-}
-
-html.light .text-zinc-100,
-html.light .text-zinc-200,
-html.light .text-zinc-300,
-html.light .text-zinc-400,
-html.light .text-zinc-500 {
-  color: hsl(var(--muted-foreground)) !important;
-}
-
-html.light .border-white\/10,
-html.light .border-white\/15 {
-  border-color: hsl(var(--border)) !important;
-}
-
-html.light .bg-black\/30,
-html.light .bg-black\/40,
-html.light .bg-black\/55,
-html.light .bg-black\/90 {
-  background-color: hsl(var(--card) / 0.9) !important;
-}
-
-html.light .bg-white\/\[0\.03\],
-html.light .bg-white\/\[0\.04\],
-html.light .bg-white\/\[0\.05\],
-html.light .bg-white\/\[0\.06\] {
-  background-color: hsl(var(--muted)) !important;
+  background: #111;
 }

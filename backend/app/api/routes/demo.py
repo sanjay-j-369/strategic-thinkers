@@ -1,8 +1,6 @@
-import json
 from datetime import datetime, timezone
 
-import redis
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from app.config import settings
@@ -85,7 +83,7 @@ async def trigger_growth_milestone():
 
 
 @router.post("/reset")
-async def reset_demo():
+async def reset_demo(request: Request):
     _guard_demo_mode()
     ensure_demo_persona(reset=True)
     queued = enqueue_demo_history(
@@ -95,18 +93,12 @@ async def reset_demo():
         include_growth=True,
     )
 
-    try:
-        redis_client = redis.from_url(settings.REDIS_URL)
-        redis_client.publish(
-            f"founder:{settings.DEMO_USER_ID}",
-            json.dumps(
-                {
-                    "type": "DEMO_RESET",
-                    "generated_at": datetime.now(timezone.utc).isoformat(),
-                }
-            ),
-        )
-    except Exception:
-        pass
+    await request.app.state.notification_bus.publish_to_user(
+        settings.DEMO_USER_ID,
+        {
+            "type": "DEMO_RESET",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
 
     return {"status": "reset-and-queued", **queued}

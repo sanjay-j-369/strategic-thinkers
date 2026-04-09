@@ -100,17 +100,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
 
+    // In demo mode, always pin the browser to the demo identity so
+    // presenter-triggered events land on the same websocket user feed.
+    if (DEMO_MODE) {
+      setLoading(true);
+      const ok = await attemptDemoSession();
+      if (!ok) {
+        signOut();
+      }
+      setLoading(false);
+      return;
+    }
+
     const stored = readStoredSession();
     if (!stored?.token) {
-      if (DEMO_MODE) {
-        setLoading(true);
-        const ok = await attemptDemoSession();
-        if (!ok) {
-          signOut();
-        }
-        setLoading(false);
-        return;
-      }
       setLoading(false);
       return;
     }
@@ -122,14 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       setSession(stored.token, data.user);
     } catch {
-      if (DEMO_MODE) {
-        const ok = await attemptDemoSession();
-        if (!ok) {
-          signOut();
-        }
-      } else {
-        signOut();
-      }
+      signOut();
     } finally {
       setLoading(false);
     }

@@ -6,6 +6,8 @@ from datetime import datetime, timedelta, timezone
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
+from app.runtime.queue import enqueue_task_sync
+from app.runtime.task_names import TaskNames
 from app.schemas.events import (
     FounderEvent,
     FounderEventMetadata,
@@ -13,7 +15,6 @@ from app.schemas.events import (
     Source,
     TaskType,
 )
-from app.workers.celery_app import celery_app
 
 
 def _build_google_credentials(credentials_json: str) -> Credentials:
@@ -125,9 +126,9 @@ def sync_calendar_events_for_user(
                         source_url=event.get("htmlLink"),
                     ),
                 )
-                celery_app.send_task(
-                    "process_founder_event",
-                    args=[founder_event.model_dump(mode="json")],
+                enqueue_task_sync(
+                    TaskNames.FOUNDER_EVENT,
+                    {"event": founder_event.model_dump(mode="json")},
                     priority=1,
                 )
                 prep_queued += 1
@@ -143,7 +144,6 @@ def sync_calendar_events_for_user(
     }
 
 
-@celery_app.task(name="poll_calendar_events")
 def poll_calendar_events():
     """Poll Google Calendar for upcoming meetings across all connected users."""
     from sqlalchemy import create_engine, select

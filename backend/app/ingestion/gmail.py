@@ -3,6 +3,8 @@ from datetime import datetime, timezone
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 
+from app.runtime.queue import enqueue_task_sync
+from app.runtime.task_names import TaskNames
 from app.schemas.events import FounderEvent, FounderEventMetadata, FounderEventPayload, TaskType, Source
 from app.pipeline.tagger import extract_tags
 from app.pipeline.action_items import detect_action_item_signal
@@ -34,8 +36,6 @@ class GmailWorker:
         after: datetime | None = None,
     ):
         """Poll recent Gmail messages and enqueue DATA_INGESTION events."""
-        from app.workers.celery_app import celery_app
-
         if not self.service:
             raise RuntimeError("GmailWorker not authenticated. Call authenticate() first.")
 
@@ -102,9 +102,9 @@ class GmailWorker:
                 ),
             )
 
-            celery_app.send_task(
-                "process_founder_event",
-                args=[event.model_dump(mode="json")],
+            enqueue_task_sync(
+                TaskNames.FOUNDER_EVENT,
+                {"event": event.model_dump(mode="json")},
                 priority=2,
             )
             events.append(event)

@@ -6,6 +6,8 @@ from app.schemas.events import FounderEvent, FounderEventMetadata, FounderEventP
 from app.ingestion.simulator.fixtures import FAKE_SLACK_MESSAGES
 from app.ingestion.simulator.config import SIM_CONFIG
 from app.pipeline.action_items import detect_action_item_signal
+from app.runtime.queue import enqueue_task_sync
+from app.runtime.task_names import TaskNames
 
 
 class SlackSimulator:
@@ -13,8 +15,6 @@ class SlackSimulator:
 
     def poll(self, user_id: str | None = None):
         """Emit a fake Slack DATA_INGESTION event."""
-        from app.workers.celery_app import celery_app
-
         uid = user_id or str(uuid.uuid4())
         msg = random.choice(FAKE_SLACK_MESSAGES)
         ts = msg.get("message_ts", "1711900000.000100")
@@ -42,9 +42,9 @@ class SlackSimulator:
             ),
         )
 
-        celery_app.send_task(
-            "process_founder_event",
-            args=[event.model_dump(mode="json")],
+        enqueue_task_sync(
+            TaskNames.FOUNDER_EVENT,
+            {"event": event.model_dump(mode="json")},
             priority=2,
         )
         return event

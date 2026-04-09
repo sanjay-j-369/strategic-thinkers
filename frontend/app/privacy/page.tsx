@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Database, Eye, LockKeyhole, Shield } from "lucide-react";
 
 import { PrivacyTable } from "@/components/PrivacyTable";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
 import { useRequireAuth } from "@/lib/use-require-auth";
 
@@ -96,7 +98,7 @@ export default function PrivacyPage() {
       const data = await apiFetch<ArchiveViewResponse>(`/api/archive/${item.id}`, {
         token,
       });
-      setViewContent(data.content_redacted || data.content || "No content available");
+      setViewContent(data.content || data.content_redacted || "No content available");
       setPiiTokens(data.pii_tokens || []);
       setPiiMappingEnc(data.pii_mapping_enc || {});
     } catch {
@@ -127,11 +129,10 @@ export default function PrivacyPage() {
 
   if (!ready) {
     return (
-      <Card>
-        <CardContent className="py-20 text-center text-sm text-zinc-500">
-          Loading privacy center...
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
     );
   }
 
@@ -169,12 +170,12 @@ export default function PrivacyPage() {
                 <CardContent className="flex items-center justify-between gap-4 pt-6">
                   <div>
                     <p className="mono-label mb-2">{label}</p>
-                    <p className="text-4xl font-semibold tracking-[-0.05em] text-white">
+                    <p className="text-4xl font-semibold tracking-[-0.05em] text-foreground">
                       {value}
                     </p>
                   </div>
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05]">
-                    <Icon className="h-4 w-4 text-zinc-100" />
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400">
+                    <Icon className="h-4 w-4 text-foreground" />
                   </div>
                 </CardContent>
               </Card>
@@ -183,17 +184,14 @@ export default function PrivacyPage() {
         </motion.section>
 
         {notice ? (
-          <Card className="border-white/15">
-            <CardContent className="pt-6 text-sm text-zinc-300">{notice}</CardContent>
-          </Card>
+          <Alert variant="info">
+            <AlertTitle>Archive updated</AlertTitle>
+            <AlertDescription>{notice}</AlertDescription>
+          </Alert>
         ) : null}
 
         {loading ? (
-          <Card>
-            <CardContent className="py-20 text-center text-sm text-zinc-500">
-              Loading archive...
-            </CardContent>
-          </Card>
+          <Skeleton className="h-64 w-full" />
         ) : (
           <>
             <Card className="overflow-hidden">
@@ -208,7 +206,7 @@ export default function PrivacyPage() {
             </Card>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-sm text-zinc-500">
+              <div className="text-sm text-muted-foreground">
                 Page {page + 1} of {Math.max(1, Math.ceil(total / PAGE_SIZE))}
               </div>
               <div className="flex gap-2">
@@ -233,9 +231,9 @@ export default function PrivacyPage() {
       </div>
 
       <Dialog open={viewOpen} onOpenChange={setViewOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Redacted archive entry</DialogTitle>
+            <DialogTitle>Archive entry</DialogTitle>
             <DialogDescription>
               {viewItem
                 ? `${viewItem.source} • ${new Date(viewItem.ingested_at).toLocaleString()}`
@@ -243,39 +241,23 @@ export default function PrivacyPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">
-              Redacted view
+            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+              Original view
             </p>
           </div>
-          <div className="max-h-[60vh] overflow-y-auto rounded-[24px] border border-white/10 bg-black/40 p-4">
+          <div className="max-h-[60vh] overflow-y-auto rounded-xl border border-border bg-card p-4">
             {viewLoading ? (
-              <div className="flex items-center gap-3 text-sm text-zinc-400">
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
                 <Shield className="h-4 w-4" />
                 Loading archived content...
               </div>
             ) : (
-              <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-7 text-zinc-300">
+              <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-7 text-muted-foreground">
                 {viewContent}
               </pre>
             )}
           </div>
-          {piiTokens.length > 0 ? (
-            <div className="rounded-[20px] border border-white/10 bg-black/30 p-4">
-              <p className="mono-label mb-3">PII Tokens</p>
-              <div className="space-y-2">
-                {piiTokens.map((token) => (
-                  <div key={token} className="grid gap-2 md:grid-cols-[1fr_2fr]">
-                    <code className="rounded bg-white/[0.06] px-2 py-1 text-xs text-zinc-300">
-                      {token}
-                    </code>
-                    <p className="truncate text-sm text-zinc-300">
-                      {piiMappingEnc[token] || "Encrypted value stored"}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
+          
           <DialogFooter>
             <Button variant="secondary" onClick={() => setViewOpen(false)}>
               Close

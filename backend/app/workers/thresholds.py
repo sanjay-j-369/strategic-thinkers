@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 from app.models.archive import Archive
 from app.models.startup_profile import StartupProfile
 from app.models.summary import Summary
+from app.runtime.queue import enqueue_task_sync
+from app.runtime.task_names import TaskNames
 from app.schemas.events import (
     FounderEvent,
     FounderEventMetadata,
@@ -15,7 +17,6 @@ from app.schemas.events import (
     Source,
     TaskType,
 )
-from app.workers.celery_app import celery_app
 
 
 def _support_load_percent(session: Session, founder_id: uuid.UUID) -> float:
@@ -51,7 +52,6 @@ def _already_triggered_today(session: Session, founder_id: uuid.UUID, topic: str
     return existing is not None
 
 
-@celery_app.task(name="evaluate_founder_thresholds")
 def evaluate_founder_thresholds(user_id: str | None = None):
     """
     Rule-based proactive checks:
@@ -100,9 +100,9 @@ def evaluate_founder_thresholds(user_id: str | None = None):
                     is_action_item=True,
                 ),
             )
-            celery_app.send_task(
-                "process_founder_event",
-                args=[event.model_dump(mode="json")],
+            enqueue_task_sync(
+                TaskNames.FOUNDER_EVENT,
+                {"event": event.model_dump(mode="json")},
                 priority=1,
             )
             fired += 1

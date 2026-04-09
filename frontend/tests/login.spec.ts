@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test.describe("Authentication E2E Tests", () => {
   test("User can sign up and land on the home page", async ({ page }) => {
     const uniqueSuffix = `${Date.now()}`;
-    await page.goto("http://localhost:3001/sign-up");
+    await page.goto("http://localhost:3000/sign-up");
 
     await page.fill('input[placeholder="Jane Founder"]', "Playwright Founder");
     await page.fill('input[type="email"]', `playwright-${uniqueSuffix}@example.com`);

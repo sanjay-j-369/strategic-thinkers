@@ -6,10 +6,10 @@ import hashlib
 import os
 from datetime import datetime, timezone
 
-from app.workers.celery_app import celery_app
+from app.runtime.queue import enqueue_task_sync
+from app.runtime.task_names import TaskNames
 
 
-@celery_app.task(name="poll_gmail_real")
 def poll_gmail_real():
     """Poll Gmail for connected users, ingest new mail, and detect meetings."""
     from sqlalchemy import create_engine, select
@@ -168,16 +168,15 @@ def _detect_and_save_meetings(user_id: str, events):
                     source_url=meet_link,
                 ),
             )
-            celery_app.send_task(
-                "process_founder_event",
-                args=[prep_event.model_dump(mode="json")],
+            enqueue_task_sync(
+                TaskNames.FOUNDER_EVENT,
+                {"event": prep_event.model_dump(mode="json")},
                 priority=1,
             )
         except Exception as exc:
             print(f"[Gmail] Meeting save error: {exc}")
 
 
-@celery_app.task(name="poll_slack_real")
 def poll_slack_real():
     """Poll Slack channels for each connected user."""
     import json

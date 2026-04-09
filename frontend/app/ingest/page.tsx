@@ -15,6 +15,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Card,
   CardContent,
@@ -23,6 +24,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/api";
 import { useRequireAuth } from "@/lib/use-require-auth";
@@ -271,11 +275,10 @@ export default function IngestPage() {
 
   if (!ready) {
     return (
-      <Card>
-        <CardContent className="py-20 text-center text-sm text-zinc-500">
-          Loading integrations...
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-56 w-full" />
+      </div>
     );
   }
 
@@ -350,14 +353,16 @@ export default function IngestPage() {
           </div>
 
           {success ? (
-            <Card className="border-white/15">
-              <CardContent className="pt-6 text-sm text-zinc-300">{success}</CardContent>
-            </Card>
+            <Alert variant="success">
+              <AlertTitle>Success</AlertTitle>
+              <AlertDescription>{success}</AlertDescription>
+            </Alert>
           ) : null}
           {error ? (
-            <Card className="border-white/15">
-              <CardContent className="pt-6 text-sm text-zinc-400">{error}</CardContent>
-            </Card>
+            <Alert variant="destructive">
+              <AlertTitle>Action failed</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           ) : null}
 
           {allowManual ? (
@@ -374,49 +379,43 @@ export default function IngestPage() {
                 </CardHeader>
               </Card>
 
-              <Card>
+              <Card className="neo-card">
                 <CardContent className="pt-6">
-                  <div className="inline-flex rounded-full border border-white/10 bg-black/30 p-1">
-                    {(["email", "slack"] as Tab[]).map((currentTab) => {
-                      const active = tab === currentTab;
-
-                      return (
-                        <Button
-                          key={currentTab}
-                          variant={active ? "default" : "ghost"}
-                          size="sm"
-                          onClick={() => {
-                            setTab(currentTab);
-                            setSuccess(null);
-                            setError(null);
-                          }}
-                          className="min-w-[120px]"
-                        >
-                          {currentTab === "email" ? (
-                            <Mail className="h-4 w-4" />
-                          ) : (
-                            <MessageSquare className="h-4 w-4" />
-                          )}
-                          {currentTab === "email" ? "Email" : "Slack"}
-                        </Button>
-                      );
-                    })}
-                  </div>
+                  <Tabs
+                    value={tab}
+                    onValueChange={(value) => {
+                      setTab(value as Tab);
+                      setSuccess(null);
+                      setError(null);
+                    }}
+                  >
+                    <TabsList>
+                      <TabsTrigger value="email">
+                        <Mail className="h-4 w-4" />
+                        Email
+                      </TabsTrigger>
+                      <TabsTrigger value="slack">
+                        <MessageSquare className="h-4 w-4" />
+                        Slack
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
                 </CardContent>
               </Card>
 
-              <motion.div
-                key={tab}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <Card>
-                  <CardContent className="pt-6">
-                    {tab === "email" ? (
+              <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)}>
+                <motion.div
+                  key={tab}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <TabsContent value="email">
+                    <Card className="neo-card">
+                      <CardContent className="pt-6">
                       <form onSubmit={submitEmail} className="space-y-5">
                         <div className="space-y-2">
-                          <label className="mono-label">From</label>
+                          <Label>From</Label>
                           <Input
                             type="email"
                             value={emailFrom}
@@ -426,7 +425,7 @@ export default function IngestPage() {
                           />
                         </div>
                         <div className="space-y-2">
-                          <label className="mono-label">Subject</label>
+                          <Label>Subject</Label>
                           <Input
                             type="text"
                             value={emailSubject}
@@ -436,7 +435,7 @@ export default function IngestPage() {
                           />
                         </div>
                         <div className="space-y-2">
-                          <label className="mono-label">Body</label>
+                          <Label>Body</Label>
                           <Textarea
                             value={emailBody}
                             onChange={(e) => setEmailBody(e.target.value)}
@@ -450,10 +449,15 @@ export default function IngestPage() {
                           label="Ingest Email"
                         />
                       </form>
-                    ) : (
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                  <TabsContent value="slack">
+                    <Card className="neo-card">
+                      <CardContent className="pt-6">
                       <form onSubmit={submitSlack} className="space-y-5">
                         <div className="space-y-2">
-                          <label className="mono-label">Channel</label>
+                          <Label>Channel</Label>
                           <Input
                             type="text"
                             value={slackChannel}
@@ -463,7 +467,7 @@ export default function IngestPage() {
                           />
                         </div>
                         <div className="space-y-2">
-                          <label className="mono-label">Message</label>
+                          <Label>Message</Label>
                           <Textarea
                             value={slackMessage}
                             onChange={(e) => setSlackMessage(e.target.value)}
@@ -477,17 +481,19 @@ export default function IngestPage() {
                           label="Ingest Message"
                         />
                       </form>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                </motion.div>
+              </Tabs>
             </>
           ) : (
-            <Card>
-              <CardContent className="pt-6 text-sm leading-7 text-zinc-400">
-                Manual ingestion is disabled in this environment. Connect Google and Slack above, then use the sync buttons to populate the feed.
-              </CardContent>
-            </Card>
+            <Alert variant="info">
+              <AlertTitle>Manual ingest disabled</AlertTitle>
+              <AlertDescription>
+                Connect Google and Slack above, then use the sync buttons to populate the feed.
+              </AlertDescription>
+            </Alert>
           )}
         </motion.div>
 
@@ -521,13 +527,13 @@ export default function IngestPage() {
               ].map(({ icon: Icon, title, body }) => (
                 <div
                   key={title}
-                  className="rounded-[24px] border border-white/10 bg-black/30 p-4"
+                  className="rounded-xl border border-border bg-card p-4"
                 >
-                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05]">
-                    <Icon className="h-4 w-4 text-zinc-100" />
+                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400">
+                    <Icon className="h-4 w-4 text-foreground" />
                   </div>
                   <p className="mono-label mb-2">{title}</p>
-                  <p className="text-sm leading-7 text-zinc-400">{body}</p>
+                  <p className="text-sm leading-7 text-muted-foreground">{body}</p>
                 </div>
               ))}
             </CardContent>
@@ -565,18 +571,18 @@ function IntegrationCard({
     <Card className="transition-transform duration-200 hover:-translate-y-0.5">
       <CardContent className="flex h-full flex-col justify-between gap-8 pt-6">
         <div className="space-y-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06]">
-            <Icon className="h-5 w-5 text-zinc-100" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400">
+            <Icon className="h-5 w-5 text-foreground" />
           </div>
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-semibold text-white">{title}</h2>
+              <h2 className="text-xl font-semibold text-foreground">{title}</h2>
               <Badge variant={connected ? "default" : "secondary"}>
                 {connected ? "Connected" : "Not connected"}
               </Badge>
             </div>
-            <p className="text-sm leading-7 text-zinc-400">{description}</p>
-            <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+            <p className="text-sm leading-7 text-muted-foreground">{description}</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
               {connected
                 ? `Last synced ${lastSyncedAt ? new Date(lastSyncedAt).toLocaleString() : "never"}`
                 : subtitle || "Connect to enable syncing"}

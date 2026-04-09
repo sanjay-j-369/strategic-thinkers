@@ -1,0 +1,11 @@
+class TaskNames:
+    FOUNDER_EVENT = "founder_event.process"
+    SYSTEM_POLL_GMAIL = "system.poll_gmail"
+    SYSTEM_POLL_SLACK = "system.poll_slack"
+    SYSTEM_POLL_CALENDAR = "system.poll_calendar"
+    SYSTEM_THRESHOLD_SCAN = "system.threshold_scan"
+    AI_WORKER_SWEEP = "pillar.worker.scan"
+    ASSISTANT_MORNING_BRIEFING = "assistant.morning_briefing"
+    ASSISTANT_PROMISE_DIGEST = "assistant.promise_digest"
+    ASSISTANT_AUTO_DRAFT = "assistant.auto_draft"
+    MENTOR_WEEKLY_REVIEW = "mentor.weekly_review"

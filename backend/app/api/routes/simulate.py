@@ -37,7 +37,7 @@ def trigger_simulation(body: SimulateRequest):
         fired.append("slack")
 
     if body.source in ("calendar", "all"):
-        poll_calendar_simulated.delay(uid)
+        poll_calendar_simulated(uid)
         fired.append("calendar")
 
     return {"status": "queued", "user_id": uid, "fired": fired}

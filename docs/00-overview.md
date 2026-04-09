@@ -22,14 +22,15 @@ The engine has two AI modes that run continuously in the background:
 | [`01-architecture.md`](./01-architecture.md) | System diagram, tiers, data flow |
 | [`02-data-schema.md`](./02-data-schema.md) | Standardised JSON payload (the "queue contract") |
 | [`03-privacy-pipeline.md`](./03-privacy-pipeline.md) | PII stripping (Presidio) + field-level encryption (Fernet) |
-| [`04-assistant-rag.md`](./04-assistant-rag.md) | Meeting prep RAG flow — Celery Beat → Pinecone → GPT-4o → WebSocket |
+| [`04-assistant-rag.md`](./04-assistant-rag.md) | Meeting prep RAG flow — Celery Beat → Pinecone → LLM synthesis → WebSocket |
 | [`05-guide-langgraph.md`](./05-guide-langgraph.md) | LangGraph reasoning graph — nodes, state, dual-query |
 | [`06-simulator.md`](./06-simulator.md) | Dual-mode ingestion — `INGESTION_MODE=simulate` vs `real` |
 | [`07-frontend.md`](./07-frontend.md) | Next.js 14 feed, real-time cards, Privacy Center |
 | [`08-project-structure.md`](./08-project-structure.md) | Full monorepo file tree |
 | [`09-stack.md`](./09-stack.md) | Tech stack table with rationale |
-| [`10-local-dev.md`](./10-local-dev.md) | Docker Compose setup, env vars, running locally |
-| [`11-verification.md`](./11-verification.md) | Test plan, verification checklist |
+| [`10-current-state.md`](./10-current-state.md) | Current product/backend status and implementation notes |
+| [`11-v2-implementation-plan.md`](./11-v2-implementation-plan.md) | Planned next-step implementation work |
+| [`12-backend-reference.md`](./12-backend-reference.md) | Current backend architecture, worker flows, storage model, and full endpoint reference |
 
 ---
 
@@ -67,4 +68,4 @@ docker compose up
 open http://localhost:3000
 ```
 
-See [`10-local-dev.md`](./10-local-dev.md) for full setup instructions.
+See [`10-current-state.md`](./10-current-state.md) for the current repo state and implementation summary.

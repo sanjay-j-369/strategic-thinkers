@@ -19,7 +19,7 @@ cp .env.example .env
 make dev-sim
 
 # 3. Visit the dashboard
-open http://localhost:3001
+open http://localhost:3000
 ```
 
 ## Architecture
@@ -44,7 +44,7 @@ open http://localhost:3001
 
 | Service | Port | Description |
 |---------|------|-------------|
-| Frontend (Next.js) | 3001 | Real-time intelligence feed |
+| Frontend (Next.js) | 3000 | Real-time intelligence feed |
 | Backend (FastAPI) | 8001 | REST API + WebSocket |
 | PostgreSQL | 5433 | Archive + summaries |
 | Redis | 6379 | Queue + pub/sub |

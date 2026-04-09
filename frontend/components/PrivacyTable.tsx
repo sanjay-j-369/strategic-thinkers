@@ -35,7 +35,7 @@ interface PrivacyTableProps {
 export function PrivacyTable({ items, onView, onDelete }: PrivacyTableProps) {
   if (items.length === 0) {
     return (
-      <div className="py-16 text-center text-zinc-500">
+      <div className="py-16 text-center text-muted-foreground">
         No archived items yet. Data will appear here as it is ingested.
       </div>
     );
@@ -56,16 +56,16 @@ export function PrivacyTable({ items, onView, onDelete }: PrivacyTableProps) {
           <TableRow key={item.id}>
             <TableCell>
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05]">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-muted">
                   <SourceIcon source={item.source} />
                 </div>
                 <div>
-                  <p className="font-medium text-zinc-100">{item.source}</p>
-                  <p className="text-xs text-zinc-500">Encrypted archive entry</p>
+                  <p className="font-medium text-foreground">{item.source}</p>
+                  <p className="text-xs text-muted-foreground">Encrypted archive entry</p>
                 </div>
               </div>
             </TableCell>
-            <TableCell className="text-zinc-400">
+            <TableCell className="text-muted-foreground">
               <div className="space-y-1">
                 {new Date(item.ingested_at).toLocaleDateString()}{" "}
                 {new Date(item.ingested_at).toLocaleTimeString([], {
@@ -83,7 +83,7 @@ export function PrivacyTable({ items, onView, onDelete }: PrivacyTableProps) {
                     </Badge>
                   ))
                 ) : (
-                  <span className="text-sm text-zinc-500">No tags</span>
+                  <span className="text-sm text-muted-foreground">No tags</span>
                 )}
               </div>
             </TableCell>
@@ -108,11 +108,11 @@ export function PrivacyTable({ items, onView, onDelete }: PrivacyTableProps) {
 
 function SourceIcon({ source }: { source: string }) {
   const icons: Record<string, JSX.Element> = {
-    GMAIL: <Mail className="h-4 w-4 text-zinc-100" />,
-    SLACK: <MessageSquare className="h-4 w-4 text-zinc-100" />,
-    CALENDAR: <CalendarDays className="h-4 w-4 text-zinc-100" />,
-    MEET_TRANSCRIPT: <Mic className="h-4 w-4 text-zinc-100" />,
+    GMAIL: <Mail className="h-4 w-4 text-foreground" />,
+    SLACK: <MessageSquare className="h-4 w-4 text-foreground" />,
+    CALENDAR: <CalendarDays className="h-4 w-4 text-foreground" />,
+    MEET_TRANSCRIPT: <Mic className="h-4 w-4 text-foreground" />,
   };
 
-  return icons[source] || <FileText className="h-4 w-4 text-zinc-100" />;
+  return icons[source] || <FileText className="h-4 w-4 text-foreground" />;
 }

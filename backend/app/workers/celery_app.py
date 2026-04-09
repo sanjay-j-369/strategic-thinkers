@@ -1,39 +1,6 @@
-import os
-os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
-os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+"""
+Legacy Celery entrypoint kept as a compatibility stub during the APScheduler/Postgres queue migration.
+New runtime orchestration now lives under `app.runtime.*`.
+"""
 
-from dotenv import load_dotenv
-from pathlib import Path
-load_dotenv(Path(__file__).resolve().parents[3] / ".env")  # project root .env
-
-from celery import Celery
-
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-
-celery_app = Celery(
-    "founders_helper",
-    broker=REDIS_URL,
-    backend=REDIS_URL,
-    include=[
-        "app.workers.consumer",
-        "app.workers.real_ingestion",
-        "app.workers.thresholds",
-        "app.ingestion.calendar",
-        "app.ingestion.simulator.calendar_sim",
-    ],
-)
-
-from app.workers.beat_schedule import CELERYBEAT_SCHEDULE
-
-celery_app.conf.update(
-    task_serializer="json",
-    accept_content=["json"],
-    result_serializer="json",
-    timezone="UTC",
-    enable_utc=True,
-    task_queue_max_priority=10,
-    task_default_priority=5,
-    broker_transport_options={"priority_steps": list(range(10))},
-    worker_pool="solo",
-    beat_schedule=CELERYBEAT_SCHEDULE,
-)
+celery_app = None

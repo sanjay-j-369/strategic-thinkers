@@ -7,10 +7,11 @@ import {
   CalendarDays,
   Inbox,
   LayoutDashboard,
-  LogOut,
   Shield,
   Sparkles,
-  SquareStack,
+  Layers,
+  CircleUser,
+  Radar
 } from "lucide-react";
 
 import { useAuth } from "@/components/providers/auth-provider";
@@ -19,66 +20,57 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const navigation = [
-  { href: "/", label: "Feed", icon: LayoutDashboard },
-  { href: "/guide", label: "Guide", icon: Sparkles },
-  { href: "/ingest", label: "Ingest", icon: Inbox },
-  { href: "/meetings", label: "Meetings", icon: CalendarDays },
-  { href: "/privacy", label: "Privacy", icon: Shield },
+  { href: "/", label: "Pulse", icon: LayoutDashboard },
+  { href: "/guide", label: "Mentor", icon: Sparkles },
+  { href: "/ingest", label: "Inputs", icon: Inbox },
+  { href: "/meetings", label: "Prep", icon: CalendarDays },
+  { href: "/privacy", label: "Memory", icon: Shield },
 ];
 
 export function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading, isAuthenticated, signOut } = useAuth();
-
   const isAuthPage = pathname === "/sign-in" || pathname === "/sign-up";
 
   return (
-    <header className="sticky top-4 z-50 mb-8">
-      <div className="mx-auto flex max-w-7xl flex-col gap-4 rounded-2xl border border-border bg-card/80 px-4 py-3 shadow-sm backdrop-blur lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background">
-              <SquareStack className="h-5 w-5 text-foreground" />
+    <header className="sticky top-0 z-50 mb-8 w-full py-2">
+      <div className="mx-auto flex max-w-7xl flex-col gap-4 border-2 border-black bg-[#fff7e8] px-4 py-3 shadow-[8px_8px_0_0_#000] sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+        <div className="flex items-center justify-between gap-6">
+          <Link href="/" className="flex items-center gap-3 transition-opacity hover:opacity-80">
+            <div className="flex h-11 w-11 items-center justify-center border-2 border-black bg-[#ffde59] text-black shadow-[4px_4px_0_0_#000]">
+              <Radar className="h-5 w-5" />
             </div>
             <div>
-              <div className="font-mono text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
+              <div className="text-xl font-black uppercase tracking-[-0.05em] text-foreground">
                 Founder OS
               </div>
-              <div className="text-sm font-semibold tracking-[-0.02em] text-foreground">
-                Intelligence Layer
-              </div>
+              <div className="mono-label text-black/45">active ai organization</div>
             </div>
           </Link>
-
-          <div className="hidden items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-[11px] font-mono uppercase tracking-[0.24em] text-muted-foreground lg:flex">
-            <span className="h-2 w-2 rounded-full bg-foreground/70" />
-            {isAuthenticated ? "Live context stream" : "Private workspace"}
-          </div>
         </div>
 
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <nav className="flex flex-wrap items-center gap-1">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+          <nav className="flex flex-wrap items-center gap-1 sm:gap-2">
             {navigation.map(({ href, label, icon: Icon }) => {
               const isActive = pathname === href;
-
               return (
                 <Link key={href} href={href} className="relative">
-                  {isActive ? (
+                  {isActive && (
                     <motion.span
                       layoutId="active-nav-pill"
-                      className="absolute inset-0 rounded-full border border-border bg-accent"
+                      className="absolute inset-0 rounded-full bg-primary/10"
                       transition={{ type: "spring", stiffness: 380, damping: 28 }}
                     />
-                  ) : null}
+                  )}
                   <span
                     className={cn(
-                      "relative z-10 flex items-center gap-2 rounded-full px-4 py-2 text-sm transition-colors",
-                      isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                      "relative z-10 flex items-center gap-2 border-2 border-black px-3 py-2 text-sm font-black uppercase tracking-[0.08em] transition-all",
+                      isActive ? "bg-[#ffde59] text-black shadow-[4px_4px_0_0_#000]" : "bg-white text-black hover:bg-[#dff2ff] hover:shadow-[4px_4px_0_0_#000]"
                     )}
                   >
                     <Icon className="h-4 w-4" />
-                    {label}
+                    <span className="hidden sm:inline-block">{label}</span>
                   </span>
                 </Link>
               );
@@ -86,38 +78,33 @@ export function SiteHeader() {
           </nav>
 
           {loading ? (
-            <div className="h-10 w-[180px] rounded-full border border-border bg-background" />
+            <div className="h-12 w-[180px] animate-pulse border-2 border-black bg-white" />
           ) : isAuthenticated && user ? (
-            <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-              <div className="rounded-full border border-border bg-background px-4 py-2">
-                <div className="text-sm font-medium text-foreground">
-                  {user.full_name || user.email}
-                </div>
-                <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                  {user.email}
-                </div>
+            <div className="flex items-center gap-3 border-t-2 border-black pt-4 lg:border-l-2 lg:border-t-0 lg:pl-4 lg:pt-0">
+              <div className="flex items-center gap-2">
+                 <CircleUser className="h-5 w-5 text-muted-foreground" />
+                 <span className="text-sm font-black uppercase tracking-[0.08em] text-foreground">{user.full_name || "User"}</span>
               </div>
               <ThemeToggle />
               <Button
                 size="sm"
-                variant="secondary"
+                variant="ghost"
                 onClick={() => {
                   signOut();
                   router.push("/sign-in");
                 }}
               >
-                <LogOut className="h-4 w-4" />
                 Sign Out
               </Button>
             </div>
           ) : (
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2 border-t-2 border-black pt-4 lg:border-l-2 lg:border-t-0 lg:pl-4 lg:pt-0">
               <ThemeToggle />
-              {!isAuthPage ? (
-                <Button asChild size="sm" variant="secondary">
+              {!isAuthPage && (
+                <Button asChild size="sm" variant="ghost">
                   <Link href="/sign-in">Sign In</Link>
                 </Button>
-              ) : null}
+              )}
               <Button asChild size="sm">
                 <Link href="/sign-up">Sign Up</Link>
               </Button>

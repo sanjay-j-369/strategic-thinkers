@@ -6,6 +6,8 @@ from app.schemas.events import FounderEvent, FounderEventMetadata, FounderEventP
 from app.ingestion.simulator.fixtures import FAKE_EMAILS
 from app.ingestion.simulator.config import SIM_CONFIG
 from app.pipeline.action_items import detect_action_item_signal
+from app.runtime.queue import enqueue_task_sync
+from app.runtime.task_names import TaskNames
 
 
 class GmailSimulator:
@@ -13,8 +15,6 @@ class GmailSimulator:
 
     def poll(self, user_id: str | None = None):
         """Emit a fake Gmail DATA_INGESTION event."""
-        from app.workers.celery_app import celery_app
-
         uid = user_id or str(uuid.uuid4())
         email = random.choice(FAKE_EMAILS)
         thread_id = email.get("thread_id") or str(uuid.uuid4())
@@ -40,9 +40,9 @@ class GmailSimulator:
             ),
         )
 
-        celery_app.send_task(
-            "process_founder_event",
-            args=[event.model_dump(mode="json")],
+        enqueue_task_sync(
+            TaskNames.FOUNDER_EVENT,
+            {"event": event.model_dump(mode="json")},
             priority=2,
         )
         return event

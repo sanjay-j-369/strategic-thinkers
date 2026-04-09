@@ -14,6 +14,8 @@ from app.models.startup_profile import StartupProfile
 from app.models.summary import Summary
 from app.models.user import User
 from app.pipeline.action_items import detect_action_item_signal
+from app.runtime.queue import enqueue_task_sync
+from app.runtime.task_names import TaskNames
 from app.schemas.events import (
     FounderEvent,
     FounderEventMetadata,
@@ -21,7 +23,6 @@ from app.schemas.events import (
     Source,
     TaskType,
 )
-from app.workers.celery_app import celery_app
 
 
 DEMO_GMAIL_EVENTS = [
@@ -211,12 +212,11 @@ def _enqueue_data_ingestion_event(
             is_action_item=detect_action_item_signal(content_raw, context_tags),
         ),
     )
-    task = celery_app.send_task(
-        "process_founder_event",
-        args=[event.model_dump(mode="json")],
+    return enqueue_task_sync(
+        TaskNames.FOUNDER_EVENT,
+        {"event": event.model_dump(mode="json")},
         priority=2,
     )
-    return task.id
 
 
 def enqueue_demo_history(
@@ -290,12 +290,12 @@ def enqueue_demo_history(
                 source_url=prep["source_url"],
             ),
         )
-        task = celery_app.send_task(
-            "process_founder_event",
-            args=[event.model_dump(mode="json")],
+        task_id = enqueue_task_sync(
+            TaskNames.FOUNDER_EVENT,
+            {"event": event.model_dump(mode="json")},
             priority=1,
         )
-        queued_task_ids.append(task.id)
+        queued_task_ids.append(task_id)
 
     if include_growth:
         question = (
@@ -319,12 +319,12 @@ def enqueue_demo_history(
                 is_action_item=True,
             ),
         )
-        task = celery_app.send_task(
-            "process_founder_event",
-            args=[event.model_dump(mode="json")],
+        task_id = enqueue_task_sync(
+            TaskNames.FOUNDER_EVENT,
+            {"event": event.model_dump(mode="json")},
             priority=1,
         )
-        queued_task_ids.append(task.id)
+        queued_task_ids.append(task_id)
 
     return {"user_id": str(demo_user_id), "queued": len(queued_task_ids), "task_ids": queued_task_ids}
 

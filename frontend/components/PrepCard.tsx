@@ -22,19 +22,19 @@ export function PrepCard({ data }: { data: PrepCardData }) {
 
   return (
     <Card className="overflow-hidden transition-transform duration-200 hover:-translate-y-0.5">
-      <CardHeader className="border-b border-white/10 pb-5">
+      <CardHeader className="border-b border-border pb-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="space-y-4">
             <Badge variant="secondary" className="w-fit">
               Meeting Prep
             </Badge>
             <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06]">
-                <CalendarDays className="h-5 w-5 text-white" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-sky-50 dark:bg-sky-900/20">
+                <CalendarDays className="h-5 w-5 text-foreground" />
               </div>
               <div className="space-y-1">
                 <CardTitle className="text-lg">{data.topic}</CardTitle>
-                <div className="flex items-center gap-2 text-sm text-zinc-500">
+                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                   <Clock3 className="h-4 w-4" />
                   {new Date(data.generated_at).toLocaleString()}
                 </div>
@@ -44,7 +44,7 @@ export function PrepCard({ data }: { data: PrepCardData }) {
 
           {data.entities && data.entities.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2 md:max-w-[40%] md:justify-end">
-              <span className="flex items-center gap-2 text-xs uppercase tracking-[0.24em] text-zinc-500">
+              <span className="flex items-center gap-2 text-xs uppercase tracking-[0.24em] text-slate-600 dark:text-slate-300">
                 <Users className="h-4 w-4" />
                 People
               </span>
@@ -69,17 +69,17 @@ export function PrepCard({ data }: { data: PrepCardData }) {
         ) : null}
 
         {lines.map((line, index) => (
-          <p key={`${line}-${index}`} className="text-sm leading-7 text-zinc-300">
+          <p key={`${line}-${index}`} className="text-sm leading-7 text-slate-600 dark:text-slate-300">
             {line}
           </p>
         ))}
 
         {promises.length > 0 ? (
           <div>
-            <p className="mono-label mb-2">Promises</p>
+            <p className="text-xs font-semibold text-sky-600 dark:text-sky-400 uppercase tracking-wide mb-2">Commitments</p>
             <div className="space-y-2">
               {promises.map((promise, index) => (
-                <p key={`${promise}-${index}`} className="text-sm leading-7 text-zinc-300">
+                <p key={`${promise}-${index}`} className="text-sm leading-7 text-slate-600 dark:text-slate-300">
                   {promise}
                 </p>
               ))}
@@ -89,20 +89,20 @@ export function PrepCard({ data }: { data: PrepCardData }) {
 
         {unresolved.length > 0 ? (
           <div>
-            <p className="mono-label mb-2">Unresolved Loops</p>
+            <p className="text-xs font-semibold text-sky-600 dark:text-sky-400 uppercase tracking-wide mb-2">Action Items</p>
             <div className="space-y-3">
               {unresolved.map((loop, index) => (
                 <div
                   key={`${loop.text}-${index}`}
-                  className="rounded-[20px] border border-white/10 bg-black/30 p-3"
+                  className="rounded-xl border border-border bg-card p-3"
                 >
-                  <p className="text-sm leading-7 text-zinc-300">{loop.text}</p>
+                  <p className="text-sm leading-7 text-slate-600 dark:text-slate-300">{loop.text}</p>
                   {loop.source_url ? (
                     <a
                       href={loop.source_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="mt-2 inline-flex items-center gap-1 text-xs uppercase tracking-[0.14em] text-zinc-400 hover:text-zinc-200"
+                      className="mt-2 inline-flex items-center gap-1 text-xs uppercase tracking-[0.14em] text-slate-600 dark:text-slate-300 hover:text-foreground"
                     >
                       <Link2 className="h-3.5 w-3.5" />
                       Thread

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { CalendarDays, MessageSquareMore, UserRoundPlus } from "lucide-react";
 
 import { useAuth } from "@/components/providers/auth-provider";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +17,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { apiFetch } from "@/lib/api";
 
 export default function SignUpPage() {
@@ -68,55 +70,33 @@ export default function SignUpPage() {
   }
 
   return (
-    <div className="grid min-h-[calc(100vh-10rem)] items-center gap-4 xl:grid-cols-[minmax(0,1.1fr)_480px]">
-      <Card>
+    <div className="grid min-h-[calc(100vh-10rem)] items-center gap-5 xl:grid-cols-[minmax(0,1fr)_480px]">
+      <Card className="neo-card bg-[#dff2ff]">
         <CardHeader>
           <Badge className="w-fit">New Account</Badge>
-          <CardTitle className="max-w-2xl text-4xl">
+          <CardTitle className="max-w-2xl font-sans text-4xl font-black uppercase tracking-[-0.05em]">
             Create your workspace and connect the sources that already know your business.
           </CardTitle>
-          <CardDescription className="max-w-xl text-base">
+          <CardDescription className="max-w-2xl text-base">
             Start with email and password, then connect Google and Slack from the ingest surface to replace manual entry.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
-          {[
-            {
-              icon: UserRoundPlus,
-              title: "Personal workspace",
-              body: "Each account gets its own feed, guide history, meetings, and privacy archive.",
-            },
-            {
-              icon: CalendarDays,
-              title: "Calendar prep",
-              body: "Pull upcoming meetings from Google Calendar instead of creating them manually.",
-            },
-            {
-              icon: MessageSquareMore,
-              title: "Slack sync",
-              body: "Bring recent channel context into the feed with one Slack connection.",
-            },
-          ].map(({ icon: Icon, title, body }) => (
-            <div
-              key={title}
-              className="rounded-[24px] border border-white/10 bg-black/30 p-4"
-            >
-              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05]">
-                <Icon className="h-4 w-4 text-zinc-100" />
-              </div>
-              <p className="mono-label mb-2">{title}</p>
-              <p className="text-sm leading-7 text-zinc-400">{body}</p>
-            </div>
-          ))}
+        <CardContent className="space-y-4">
+          <div className="neo-stat bg-white">
+            <p className="mono-label text-black/50">What gets created</p>
+            <p className="mt-3 text-sm leading-7 text-black/75">
+              A private operator workspace with notifications, meetings, promises, drafts, archive memory, and connected-source sync.
+            </p>
+          </div>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="neo-card">
         <CardHeader>
           <Badge variant="secondary" className="w-fit">
             Sign Up
           </Badge>
-          <CardTitle className="text-3xl">Create account.</CardTitle>
+          <CardTitle className="font-sans text-3xl font-black uppercase tracking-tight">Create account.</CardTitle>
           <CardDescription>
             Use a work email and a password with at least 8 characters.
           </CardDescription>
@@ -124,7 +104,7 @@ export default function SignUpPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
-              <label className="mono-label">Full Name</label>
+              <Label>Full Name</Label>
               <Input
                 type="text"
                 value={fullName}
@@ -133,7 +113,7 @@ export default function SignUpPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="mono-label">Email</label>
+              <Label>Email</Label>
               <Input
                 type="email"
                 value={email}
@@ -143,7 +123,7 @@ export default function SignUpPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="mono-label">Password</label>
+              <Label>Password</Label>
               <Input
                 type="password"
                 value={password}
@@ -154,9 +134,10 @@ export default function SignUpPage() {
             </div>
 
             {error ? (
-              <div className="rounded-[20px] border border-white/10 bg-black/30 px-4 py-3 text-sm text-zinc-300">
-                {error}
-              </div>
+              <Alert variant="destructive">
+                <AlertTitle>Sign up failed</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             ) : null}
 
             <Button type="submit" size="lg" className="w-full" disabled={submitting}>
@@ -164,9 +145,9 @@ export default function SignUpPage() {
             </Button>
           </form>
 
-          <div className="mt-6 text-sm text-zinc-500">
+          <div className="mt-6 text-sm text-muted-foreground">
             Already have an account?{" "}
-            <Link href="/sign-in" className="text-zinc-200 underline-offset-4 hover:underline">
+            <Link href="/sign-in" className="text-foreground underline-offset-4 hover:underline">
               Sign in
             </Link>
           </div>

@@ -6,8 +6,7 @@ psycopg2-binary
 alembic
 pydantic-settings
 pydantic[email]
-celery[redis]>=5.3
-redis
+apscheduler>=3.10
 groq>=0.9.0
 sentence-transformers>=3.0
 pinecone>=3.0.0

@@ -12,6 +12,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Card,
   CardContent,
@@ -29,6 +30,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
 import { useRequireAuth } from "@/lib/use-require-auth";
 
@@ -118,11 +121,10 @@ export default function MeetingsPage() {
 
   if (!ready) {
     return (
-      <Card>
-        <CardContent className="py-20 text-center text-sm text-zinc-500">
-          Loading meetings...
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-28 w-full" />
+      </div>
     );
   }
 
@@ -144,7 +146,7 @@ export default function MeetingsPage() {
                 Add a meeting manually or let synced Google Calendar events populate this view and queue prep cards for the feed.
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-wrap gap-3 border-t border-white/10 pt-6">
+            <CardContent className="flex flex-wrap gap-3 border-t border-border pt-6">
               <DialogTrigger asChild>
                 <Button size="lg">
                   <Plus className="h-4 w-4" />
@@ -166,12 +168,12 @@ export default function MeetingsPage() {
                 <CardContent className="flex items-center justify-between gap-4 pt-6">
                   <div>
                     <p className="mono-label mb-2">{label}</p>
-                    <p className="text-4xl font-semibold tracking-[-0.05em] text-white">
+                    <p className="text-4xl font-semibold tracking-[-0.05em] text-foreground">
                       {value}
                     </p>
                   </div>
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05]">
-                    <Icon className="h-4 w-4 text-zinc-100" />
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400">
+                    <Icon className="h-4 w-4 text-foreground" />
                   </div>
                 </CardContent>
               </Card>
@@ -180,36 +182,33 @@ export default function MeetingsPage() {
         </motion.section>
 
         {success ? (
-          <Card className="border-white/15">
-            <CardContent className="pt-6 text-sm text-zinc-300">{success}</CardContent>
-          </Card>
+          <Alert variant="success">
+            <AlertTitle>Scheduled</AlertTitle>
+            <AlertDescription>{success}</AlertDescription>
+          </Alert>
         ) : null}
         {error ? (
-          <Card className="border-white/15">
-            <CardContent className="pt-6 text-sm text-zinc-400">{error}</CardContent>
-          </Card>
+          <Alert variant="destructive">
+            <AlertTitle>Scheduling failed</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         ) : null}
 
         {loading ? (
           <div className="space-y-4">
             {[1, 2, 3].map((item) => (
-              <Card key={item} className="animate-pulse">
-                <CardContent className="space-y-4 pt-6">
-                  <div className="h-5 w-1/3 rounded-full bg-white/10" />
-                  <div className="h-4 w-1/2 rounded-full bg-white/5" />
-                </CardContent>
-              </Card>
+              <Skeleton key={item} className="h-28 w-full" />
             ))}
           </div>
         ) : meetings.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center gap-4 py-20 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-3xl border border-white/10 bg-white/[0.05]">
-                <CalendarDays className="h-6 w-6 text-zinc-100" />
+              <div className="flex h-14 w-14 items-center justify-center rounded-3xl border border-border bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400">
+                <CalendarDays className="h-6 w-6 text-foreground" />
               </div>
               <div className="space-y-2">
-                <h2 className="text-xl font-semibold text-white">No meetings scheduled</h2>
-                <p className="text-sm leading-7 text-zinc-500">
+                <h2 className="text-xl font-semibold text-foreground">No meetings scheduled</h2>
+                <p className="text-sm leading-7 text-muted-foreground">
                   Create one manually or sync Google Calendar from the ingest page.
                 </p>
               </div>
@@ -241,7 +240,7 @@ export default function MeetingsPage() {
           </DialogHeader>
 
           <div className="space-y-2">
-            <label className="mono-label">Meeting Topic</label>
+            <Label>Meeting Topic</Label>
             <Input
               type="text"
               value={topic}
@@ -252,7 +251,7 @@ export default function MeetingsPage() {
           </div>
 
           <div className="space-y-2">
-            <label className="mono-label">Attendees</label>
+            <Label>Attendees</Label>
             <Input
               type="text"
               value={attendees}
@@ -262,7 +261,7 @@ export default function MeetingsPage() {
           </div>
 
           <div className="space-y-2">
-            <label className="mono-label">Date and Time</label>
+            <Label>Date and Time</Label>
             <Input
               type="datetime-local"
               value={scheduledAt}
@@ -303,16 +302,16 @@ function MeetingCard({ meeting }: { meeting: Meeting }) {
               <Badge variant={isUpcoming ? "default" : "secondary"}>
                 {isUpcoming ? "Upcoming" : "Past"}
               </Badge>
-              <div className="flex items-center gap-2 text-sm text-zinc-500">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Clock3 className="h-4 w-4" />
                 {date.toLocaleString()}
               </div>
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-xl font-semibold text-white">{meeting.topic}</h3>
+              <h3 className="text-xl font-semibold text-foreground">{meeting.topic}</h3>
               {meeting.attendees?.length > 0 ? (
-                <div className="flex items-start gap-2 text-sm leading-7 text-zinc-400">
+                <div className="flex items-start gap-2 text-sm leading-7 text-muted-foreground">
                   <Users className="mt-1 h-4 w-4 shrink-0" />
                   <span>{meeting.attendees.join(", ")}</span>
                 </div>
@@ -320,9 +319,9 @@ function MeetingCard({ meeting }: { meeting: Meeting }) {
             </div>
 
             {summaryText ? (
-              <div className="rounded-[22px] border border-white/10 bg-black/30 p-4">
+              <div className="rounded-xl border border-border bg-card p-4">
                 <p className="mono-label mb-2">Prep Summary</p>
-                <p className="text-sm leading-7 text-zinc-300">{summaryText}</p>
+                <p className="text-sm leading-7 text-muted-foreground">{summaryText}</p>
               </div>
             ) : null}
           </div>

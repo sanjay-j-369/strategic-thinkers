@@ -3,6 +3,8 @@ from datetime import datetime, timezone
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
+from app.runtime.queue import enqueue_task_sync
+from app.runtime.task_names import TaskNames
 from app.schemas.events import FounderEvent, FounderEventMetadata, FounderEventPayload, TaskType, Source
 from app.pipeline.tagger import extract_tags
 from app.pipeline.action_items import detect_action_item_signal
@@ -39,8 +41,6 @@ class SlackWorker:
 
     def handle_webhook(self, payload: dict, user_id: str):
         """Handle incoming Slack webhook event and enqueue DATA_INGESTION."""
-        from app.workers.celery_app import celery_app
-
         event = payload.get("event", {})
         text = event.get("text", "")
         channel = event.get("channel", "")
@@ -74,9 +74,9 @@ class SlackWorker:
             ),
         )
 
-        celery_app.send_task(
-            "process_founder_event",
-            args=[founder_event.model_dump(mode="json")],
+        enqueue_task_sync(
+            TaskNames.FOUNDER_EVENT,
+            {"event": founder_event.model_dump(mode="json")},
             priority=2,
         )
         return founder_event
@@ -89,8 +89,6 @@ class SlackWorker:
         oldest: float | None = None,
     ):
         """Poll recent messages from specified channels."""
-        from app.workers.celery_app import celery_app
-
         if not self.client:
             raise RuntimeError("SlackWorker not authenticated.")
 
@@ -131,9 +129,9 @@ class SlackWorker:
                         ),
                     )
 
-                    celery_app.send_task(
-                        "process_founder_event",
-                        args=[event.model_dump(mode="json")],
+                    enqueue_task_sync(
+                        TaskNames.FOUNDER_EVENT,
+                        {"event": event.model_dump(mode="json")},
                         priority=2,
                     )
                     events.append(event)

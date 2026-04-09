@@ -69,14 +69,14 @@ The stack is optimized for AI integration, real-time updates, and robust data pr
 | **Privacy / Encryption** | Microsoft Presidio, Cryptography (Fernet) | Enterprise-grade PII detection and field-level encryption. |
 | **LLM & Embeddings** | OpenAI (`gpt-4o`, `text-embedding-3-small`) | State-of-the-art models for synthesis and vectorization. |
 | **Reasoning Engine** | LangGraph | Stateful, multi-actor LLM orchestration for complex decision trees. |
-| **Infrastructure** | Docker, Docker Compose | Containerized local environment mapping frontend to `3001` and backend to `8001`. |
+| **Infrastructure** | Docker, Docker Compose | Containerized local environment mapping frontend to `3000` and backend to `8001`. |
 
 ---
 
 ## 4. Current Implementation Status & Capabilities
 
 ### ✅ Fully Implemented Features
-1.  **Dockerized Local Environment:** The system runs reliably using `docker-compose.yml`, mapping Next.js to port `3001` and FastAPI to port `8001` to avoid common local port conflicts.
+1.  **Dockerized Local Environment:** The system runs reliably using `docker-compose.yml`, mapping Next.js to port `3000` and FastAPI to port `8001`.
 2.  **Dual Ingestion Modes:** The `mode_router.py` accurately switches between simulated data and real OAuth data based on the `.env` file configuration.
 3.  **The Privacy Pipeline:**
     *   Presidio successfully identifies and blanks out custom entities within incoming text.

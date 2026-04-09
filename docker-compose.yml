@@ -42,7 +42,7 @@ services:
       ALLOW_MANUAL_INGESTION: ${ALLOW_MANUAL_INGESTION:-true}
       DEMO_MODE: ${DEMO_MODE:-false}
       DEMO_USER_ID: ${DEMO_USER_ID:-550e8400-e29b-41d4-a716-446655440000}
-      FRONTEND_URL: http://localhost:3001
+      FRONTEND_URL: http://localhost:3000
       GOOGLE_REDIRECT_URI: http://localhost:8001/api/auth/google/callback
       SLACK_REDIRECT_URI: http://localhost:8001/api/auth/slack/callback
     depends_on:
@@ -108,7 +108,7 @@ services:
         NEXT_PUBLIC_DEMO_MODE: ${DEMO_MODE:-false}
         BACKEND_INTERNAL_URL: http://backend:8000
     ports:
-      - "3001:3000"
+      - "3000:3000"
     env_file:
       - .env
     environment:
@@ -118,8 +118,14 @@ services:
       NEXT_PUBLIC_ALLOW_MANUAL_INGESTION: ${ALLOW_MANUAL_INGESTION:-true}
       NEXT_PUBLIC_DEMO_MODE: ${DEMO_MODE:-false}
       BACKEND_INTERNAL_URL: http://backend:8000
+      NODE_ENV: development
     depends_on:
       - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
 
 volumes:
   postgres_data:
