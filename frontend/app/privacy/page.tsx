@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
-import { decryptPIIMapping } from "@/lib/crypto";
+import { decryptArchiveContent, decryptPIIMapping } from "@/lib/crypto";
 import { useRequireAuth } from "@/lib/use-require-auth";
 
 interface ArchiveItem {
@@ -37,6 +37,8 @@ interface ArchiveItem {
 
 interface ArchiveViewResponse {
   content?: string;
+  content_enc?: string;
+  content_encryption_scheme?: string;
   content_redacted?: string;
   pii_tokens?: string[];
   pii_mapping_enc?: Record<string, string>;
@@ -99,13 +101,19 @@ export default function PrivacyPage() {
         token,
       });
       const redactedContent = data.content_redacted || data.content || "No content available";
+      const contentEncryptionScheme = data.content_encryption_scheme || "fernet";
       const scheme = data.pii_mapping_scheme || {};
       const encrypted = data.pii_mapping_enc || {};
       const rsaMapping: Record<string, string> = Object.fromEntries(
         Object.entries(encrypted).filter(([tokenKey]) => scheme[tokenKey] === "rsa_oaep")
       );
 
-      if (Object.keys(rsaMapping).length > 0) {
+      if (contentEncryptionScheme === "rsa_aes_gcm" && data.content_enc) {
+        if (!privateKey) {
+          throw new Error("Private key unavailable in memory. Sign in again to unlock content.");
+        }
+        setViewContent(await decryptArchiveContent(data.content_enc, privateKey));
+      } else if (Object.keys(rsaMapping).length > 0) {
         if (!privateKey) {
           throw new Error("Private key unavailable in memory. Sign in again to unlock content.");
         }
@@ -116,7 +124,7 @@ export default function PrivacyPage() {
         }
         setViewContent(reconstructed);
       } else {
-        // Legacy rows may still be reconstructed server-side.
+        // Legacy rows are still decrypted server-side when only Fernet exists.
         setViewContent(data.content || redactedContent);
       }
       setPiiTokens(data.pii_tokens || []);
@@ -166,14 +174,14 @@ export default function PrivacyPage() {
           animate={{ opacity: 1, y: 0 }}
           className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_360px]"
         >
-          <Card>
+          <Card className="panel-pro">
             <CardHeader>
               <Badge className="w-fit">Privacy Center</Badge>
               <CardTitle className="text-4xl">
                 Inspect what the system kept.
               </CardTitle>
               <CardDescription className="max-w-2xl text-base">
-                Review archived entries, inspect redacted content with token placeholders, and forget records permanently from the archive surface.
+                Review archived entries, decrypt original content locally in the browser, and remove records permanently from the archive surface.
               </CardDescription>
             </CardHeader>
           </Card>
@@ -188,7 +196,7 @@ export default function PrivacyPage() {
                 icon: LockKeyhole,
               },
             ].map(({ label, value, icon: Icon }) => (
-              <Card key={label}>
+              <Card key={label} className="panel-pro">
                 <CardContent className="flex items-center justify-between gap-4 pt-6">
                   <div>
                     <p className="mono-label mb-2">{label}</p>
@@ -216,7 +224,7 @@ export default function PrivacyPage() {
           <Skeleton className="h-64 w-full" />
         ) : (
           <>
-            <Card className="overflow-hidden">
+            <Card className="panel-pro overflow-hidden">
               <PrivacyTable
                 items={items}
                 onView={handleView}
@@ -253,7 +261,7 @@ export default function PrivacyPage() {
       </div>
 
       <Dialog open={viewOpen} onOpenChange={setViewOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl rounded-[1.5rem] border border-border/70 bg-card/95 p-8">
           <DialogHeader>
             <DialogTitle>Archive entry</DialogTitle>
             <DialogDescription>
@@ -263,11 +271,15 @@ export default function PrivacyPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="inline-flex items-center gap-2 rounded-full border border-border/70 px-3 py-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+              <span className="live-dot" />
+              Client-decrypted view
+            </div>
             <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-              Original view
+              If placeholders remain, the stored source content was already sanitized before archival.
             </p>
           </div>
-          <div className="max-h-[60vh] overflow-y-auto rounded-xl border border-border bg-card p-4">
+          <div className="max-h-[60vh] overflow-y-auto rounded-[1.2rem] border border-border/70 bg-background p-5 shadow-inner">
             {viewLoading ? (
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
                 <Shield className="h-4 w-4" />

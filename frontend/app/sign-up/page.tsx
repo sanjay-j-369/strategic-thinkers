@@ -24,12 +24,13 @@ import {
   exportPublicKeyPem,
   generateKeyPair,
   generateSalt,
+  unwrapPrivateKey,
   wrapPrivateKey,
 } from "@/lib/crypto";
 
 export default function SignUpPage() {
   const router = useRouter();
-  const { isAuthenticated, loading, setSession } = useAuth();
+  const { isAuthenticated, loading, setPrivateKey, setSession } = useAuth();
   const [redirectTo, setRedirectTo] = useState("/");
 
   const [fullName, setFullName] = useState("");
@@ -77,6 +78,15 @@ export default function SignUpPage() {
           encrypted_private_key: encryptedPrivateKey,
         },
       });
+      if (data.encrypted_private_key === encryptedPrivateKey) {
+        setPrivateKey(keyPair.privateKey);
+      } else if (data.encrypted_private_key) {
+        const restoredPrivateKey = await unwrapPrivateKey(
+          data.encrypted_private_key,
+          masterKey
+        );
+        setPrivateKey(restoredPrivateKey);
+      }
       setSession(data.token, data.user);
       router.replace(redirectTo);
     } catch (err) {

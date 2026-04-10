@@ -83,6 +83,13 @@ interface WrappedPrivateKeyPayload {
   ciphertext: string;
 }
 
+interface HybridEncryptedPayload {
+  scheme: "rsa_aes_gcm";
+  wrapped_key: string;
+  iv: string;
+  ciphertext: string;
+}
+
 export async function wrapPrivateKey(
   privateKey: CryptoKey,
   masterKey: CryptoKey
@@ -142,4 +149,36 @@ export async function decryptPIIMapping(
     })
   );
   return Object.fromEntries(entries);
+}
+
+export async function decryptArchiveContent(
+  encryptedContent: string,
+  privateKey: CryptoKey
+): Promise<string> {
+  const payload = JSON.parse(encryptedContent) as HybridEncryptedPayload;
+  if (payload.scheme !== "rsa_aes_gcm") {
+    throw new Error("Unsupported archive encryption payload.");
+  }
+
+  const aesKeyBytes = await window.crypto.subtle.decrypt(
+    { name: "RSA-OAEP" },
+    privateKey,
+    toArrayBuffer(base64ToBytes(payload.wrapped_key))
+  );
+  const aesKey = await window.crypto.subtle.importKey(
+    "raw",
+    aesKeyBytes,
+    { name: "AES-GCM" },
+    false,
+    ["decrypt"]
+  );
+  const plaintext = await window.crypto.subtle.decrypt(
+    {
+      name: "AES-GCM",
+      iv: toArrayBuffer(base64ToBytes(payload.iv)),
+    },
+    aesKey,
+    toArrayBuffer(base64ToBytes(payload.ciphertext))
+  );
+  return textDecoder.decode(plaintext);
 }

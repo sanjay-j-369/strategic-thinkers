@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.agentic.assistant.service import run_assistant_cycle
 from app.agentic.persistence import save_drafts, save_notification, save_promise_items
@@ -18,6 +19,7 @@ from app.models.pii_vault import PiiVault
 from app.models.summary import Summary
 from app.models.user import User
 from app.observability import emit_demo_log
+from app.pipeline.asymmetric_encryption import encrypt_large_with_public_key
 from app.pipeline.embedder import upsert_to_pinecone
 from app.pipeline.encryption import encrypt
 from app.pipeline.meeting_detector import detect_meeting
@@ -63,7 +65,11 @@ def _handle_data_ingestion(event: FounderEvent, user_id: str) -> dict:
     content_redacted, pii_mapping = strip_pii(
         content_raw, user_id, user_public_key=user_public_key
     )
-    content_enc = encrypt(user_id, content_raw)
+    if user_public_key:
+        content_enc = encrypt_large_with_public_key(user_public_key, content_raw)
+    else:
+        # Legacy compatibility for accounts without client key material.
+        content_enc = encrypt(user_id, content_raw)
     tags = event.payload.context_tags or extract_tags(content_redacted)
 
     emit_demo_log(
@@ -140,22 +146,67 @@ def _handle_data_ingestion(event: FounderEvent, user_id: str) -> dict:
         step="assistant_cycle",
         details={"trace_id": event.metadata.trace_id},
     )
-    assistant_result = run_assistant_cycle(user_id=user_id, mode="ingestion_watch")
-    saved_promises = save_promise_items(user_id, assistant_result.get("promises", []))
-    saved_drafts = save_drafts(user_id, assistant_result.get("drafts", []))
-    notifications = [
-        save_notification(
+    saved_promises: list[dict] = []
+    saved_drafts: list[dict] = []
+    notifications: list[dict] = []
+    try:
+        assistant_result = run_assistant_cycle(user_id=user_id, mode="ingestion_watch")
+        saved_promises = save_promise_items(user_id, assistant_result.get("promises", []))
+        saved_drafts = save_drafts(user_id, assistant_result.get("drafts", []))
+        notifications = [
+            save_notification(
+                user_id=user_id,
+                pillar="ASSISTANT",
+                agent_name="Chief of Staff",
+                notification_type=notification["notification_type"],
+                severity=notification["severity"],
+                title=notification["title"],
+                body=notification["body"],
+                payload=notification.get("payload"),
+            )
+            for notification in assistant_result.get("notifications", [])
+        ]
+        if not notifications:
+            notifications = [
+                save_notification(
+                    user_id=user_id,
+                    pillar="ASSISTANT",
+                    agent_name="Chief of Staff",
+                    notification_type="INGESTION_WATCH_UPDATE",
+                    severity="info",
+                    title="New context processed",
+                    body="Ingestion completed and founder context has been refreshed.",
+                    payload={
+                        "trace_id": event.metadata.trace_id,
+                        "promise_count": len(saved_promises),
+                        "draft_count": len(saved_drafts),
+                    },
+                )
+            ]
+    except Exception as exc:
+        # Prevent ingestion retries from duplicating archive rows when the
+        # assistant lane has an environment/config issue.
+        emit_demo_log(
             user_id=user_id,
-            pillar="ASSISTANT",
-            agent_name="Chief of Staff",
-            notification_type=notification["notification_type"],
-            severity=notification["severity"],
-            title=notification["title"],
-            body=notification["body"],
-            payload=notification.get("payload"),
+            message=f"[Ingestion Pipeline] Assistant lane failed: {exc}",
+            pillar="SYSTEM",
+            agent_name="Ingestion Pipeline",
+            event_type="pipeline_log",
+            step="assistant_cycle_failed",
+            details={"trace_id": event.metadata.trace_id, "error": str(exc)},
         )
-        for notification in assistant_result.get("notifications", [])
-    ]
+        notifications = [
+            save_notification(
+                user_id=user_id,
+                pillar="ASSISTANT",
+                agent_name="Chief of Staff",
+                notification_type="ASSISTANT_PIPELINE_ERROR",
+                severity="warning",
+                title="Assistant analysis skipped",
+                body="Ingestion completed, but assistant post-processing failed. Check worker logs.",
+                payload={"trace_id": event.metadata.trace_id, "error": str(exc)},
+            )
+        ]
     emit_demo_log(
         user_id=user_id,
         message=(
@@ -196,22 +247,41 @@ def _handle_assistant_prep(event: FounderEvent, user_id: str) -> dict:
 
 
 def _handle_guide_query(event: FounderEvent, user_id: str) -> dict:
-    graph = build_guide_graph()
-    result = graph.invoke(
-        {
-            "user_id": user_id,
-            "question": event.payload.topic or event.payload.content_raw,
-            "founder_profile": None,
-            "communication_style": None,
-            "kb_results": None,
-            "analysis": None,
-            "red_flags": [],
-            "output": None,
+    question = event.payload.topic or event.payload.content_raw
+    try:
+        graph = build_guide_graph()
+        result = graph.invoke(
+            {
+                "user_id": user_id,
+                "question": question,
+                "founder_profile": None,
+                "communication_style": None,
+                "kb_results": None,
+                "analysis": None,
+                "red_flags": [],
+                "output": None,
+            }
+        )
+    except Exception as exc:
+        emit_demo_log(
+            user_id=user_id,
+            message=f"[Ingestion Pipeline] Guide lane failed: {exc}",
+            pillar="SYSTEM",
+            agent_name="Ingestion Pipeline",
+            event_type="pipeline_log",
+            step="guide_query_failed",
+            details={"trace_id": event.metadata.trace_id, "error": str(exc)},
+        )
+        result = {
+            "question": question,
+            "analysis": "Guide analysis could not be generated due to a temporary backend issue.",
+            "red_flags": ["Guide lane error"],
+            "output": "Retry this guide query after the model/index services recover.",
+            "communication_style": "clear and pragmatic",
         }
-    )
     card = {
         "type": "GUIDE_QUERY",
-        "question": result.get("question", ""),
+        "question": result.get("question", question),
         "analysis": result.get("analysis", ""),
         "red_flags": result.get("red_flags", []),
         "output": result.get("output", ""),
@@ -223,10 +293,10 @@ def _handle_guide_query(event: FounderEvent, user_id: str) -> dict:
         if "milestone-trigger" in (event.payload.context_tags or [])
         else "GUIDE_QUERY"
     )
-    _save_summary(user_id, summary_type, result.get("question", ""), card)
+    _save_summary(user_id, summary_type, result.get("question", question), card)
     _archive_past_dilemma(
         user_id=user_id,
-        question=result.get("question", ""),
+        question=result.get("question", question),
         output=result.get("output", ""),
         red_flags=result.get("red_flags", []),
     )
@@ -236,7 +306,7 @@ def _handle_guide_query(event: FounderEvent, user_id: str) -> dict:
         agent_name="Guide",
         notification_type=summary_type,
         severity="info",
-        title=result.get("question", "Strategic guidance ready"),
+        title=result.get("question", question or "Strategic guidance ready"),
         body=result.get("output", "")[:400],
         payload=card,
     )
@@ -311,29 +381,50 @@ def _save_summary(user_id: str, summary_type: str, topic: str | None, summary_te
 def _save_pii_mapping(user_id: str, mapping: dict, encryption_scheme: str) -> None:
     engine = build_sync_engine()
     Base.metadata.create_all(engine)
-    with Session(engine) as session:
-        for token, enc_val in mapping.items():
-            session.add(
-                PiiVault(
-                    user_id=uuid.UUID(user_id),
-                    token=token,
-                    encrypted_value=enc_val,
-                    encryption_scheme=encryption_scheme,
+    try:
+        with Session(engine) as session:
+            for token, enc_val in mapping.items():
+                session.add(
+                    PiiVault(
+                        user_id=uuid.UUID(user_id),
+                        token=token,
+                        encrypted_value=enc_val,
+                        encryption_scheme=encryption_scheme,
+                    )
                 )
-            )
-        session.commit()
+            session.commit()
+    except SQLAlchemyError:
+        # Legacy schema fallback without pii_vault.encryption_scheme.
+        with Session(engine) as session:
+            for token, enc_val in mapping.items():
+                session.add(
+                    PiiVault(
+                        user_id=uuid.UUID(user_id),
+                        token=token,
+                        encrypted_value=enc_val,
+                    )
+                )
+            session.commit()
 
 
 def _get_user_public_key(user_id: str) -> str | None:
     engine = build_sync_engine()
     Base.metadata.create_all(engine)
-    with Session(engine) as session:
-        user = session.execute(
-            select(User).where(User.id == uuid.UUID(user_id))
-        ).scalar_one_or_none()
-        if not user:
-            return None
-        return user.public_key
+    try:
+        with Session(engine) as session:
+            user = session.execute(
+                select(User).where(User.id == uuid.UUID(user_id))
+            ).scalar_one_or_none()
+            if not user:
+                return None
+            try:
+                return user.public_key
+            except Exception:
+                # Column may not exist yet in legacy schemas.
+                return None
+    except SQLAlchemyError:
+        # Keep ingestion pipeline alive in partially migrated environments.
+        return None
 
 
 def _archive_past_dilemma(user_id: str, question: str, output: str, red_flags: list[str]) -> None:

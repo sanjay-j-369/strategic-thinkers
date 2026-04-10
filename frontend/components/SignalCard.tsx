@@ -22,6 +22,13 @@ export interface SignalItem {
   generated_at?: string;
 }
 
+function stringifyPayloadValue(value: unknown) {
+  if (value == null) return null;
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return null;
+}
+
 function signalIcon(type?: string, pillar?: string) {
   if (type === "VIP_INTERRUPT") return BellRing;
   if (type === "RUNWAY_ALERT") return Flame;
@@ -105,7 +112,7 @@ export function SignalCard({ signal }: { signal: SignalItem }) {
               .map(([key, value]) => (
                 <div key={key} className="shadow-pixel border-2 border-border bg-card px-3 py-3">
                   <p className="mono-label text-foreground/50">{key.replace(/_/g, " ")}</p>
-                  <p className="mt-1 text-sm font-medium text-foreground">{String(value)}</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">{stringifyPayloadValue(value)}</p>
                 </div>
               ))}
           </div>

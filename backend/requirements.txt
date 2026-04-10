@@ -7,6 +7,7 @@ alembic
 pydantic-settings
 pydantic[email]
 apscheduler>=3.10
+celery>=5.4
 groq>=0.9.0
 sentence-transformers>=3.0
 pinecone>=3.0.0

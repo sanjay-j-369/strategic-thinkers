@@ -162,6 +162,20 @@ def compose_assistant_outputs(state: AssistantState) -> AssistantState:
                 "payload": {"count": len(state["drafts"])},
             }
         )
+    if state["mode"] == "ingestion_watch" and not notifications:
+        # Ensure ingestion-triggered assistant runs are visible in the feed.
+        notifications.append(
+            {
+                "notification_type": "INGESTION_WATCH_UPDATE",
+                "severity": "info",
+                "title": "New context processed",
+                "body": (briefing.strip() or fallback_brief)[:320],
+                "payload": {
+                    "promise_count": len(state.get("promises", [])),
+                    "draft_count": len(state.get("drafts", [])),
+                },
+            }
+        )
 
     return {
         **state,

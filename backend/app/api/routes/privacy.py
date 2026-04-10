@@ -1,6 +1,9 @@
 import os
+import json
 from fastapi import APIRouter, Request, Query, HTTPException
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
+from pydantic import BaseModel
 from app.pipeline.encryption import decrypt
 
 from app.models.archive import Archive
@@ -8,6 +11,10 @@ from app.models.pii_vault import PiiVault
 from app.security import resolve_user
 
 router = APIRouter(prefix="/api/archive", tags=["privacy"])
+
+
+class ResolvePIITokensBody(BaseModel):
+    tokens: list[str]
 
 
 @router.get("")
@@ -48,6 +55,53 @@ async def list_archive(
     }
 
 
+@router.post("/pii/resolve")
+async def resolve_pii_tokens(
+    body: ResolvePIITokensBody,
+    request: Request,
+    user_id: str | None = Query(None),
+):
+    user = await resolve_user(request, user_id=user_id)
+    tokens = sorted({token for token in body.tokens if token})
+    if not tokens:
+        return {
+            "pii_mapping_enc": {},
+            "pii_mapping_plain": {},
+            "pii_mapping_scheme": {},
+        }
+
+    async_session = request.app.state.async_session
+    async with async_session() as session:
+        rows = (
+            await session.execute(
+                select(PiiVault).where(
+                    PiiVault.user_id == user.id,
+                    PiiVault.token.in_(tokens),
+                )
+            )
+        ).scalars().all()
+
+    enc: dict[str, str] = {}
+    plain: dict[str, str] = {}
+    scheme: dict[str, str] = {}
+    for row in rows:
+        row_scheme = _safe_scheme(row)
+        scheme[row.token] = row_scheme
+        if row_scheme == "rsa_oaep":
+            enc[row.token] = row.encrypted_value
+        else:
+            try:
+                plain[row.token] = decrypt(str(user.id), row.encrypted_value)
+            except Exception:
+                pass
+
+    return {
+        "pii_mapping_enc": enc,
+        "pii_mapping_plain": plain,
+        "pii_mapping_scheme": scheme,
+    }
+
+
 @router.get("/{item_id}")
 async def get_archive_item(
     item_id: str,
@@ -66,6 +120,8 @@ async def get_archive_item(
             raise HTTPException(status_code=404, detail="Archive item not found")
 
         data = item.to_dict()
+        data["content_enc"] = item.content_enc
+        data["content_encryption_scheme"] = _detect_content_scheme(item.content_enc)
         data["content"] = item.content_redacted or ""
         data["content_redacted"] = item.content_redacted or ""
 
@@ -77,12 +133,18 @@ async def get_archive_item(
         data["pii_mapping_enc"] = {
             row.token: row.encrypted_value for row in pii_rows.scalars().all()
         }
-        pii_scheme_rows = await session.execute(
-            select(PiiVault).where(PiiVault.user_id == user.id, PiiVault.token.in_(pii_tokens))
-        )
-        data["pii_mapping_scheme"] = {
-            row.token: row.encryption_scheme for row in pii_scheme_rows.scalars().all()
-        }
+        try:
+            pii_scheme_rows = await session.execute(
+                select(PiiVault).where(PiiVault.user_id == user.id, PiiVault.token.in_(pii_tokens))
+            )
+            data["pii_mapping_scheme"] = {
+                row.token: row.encryption_scheme for row in pii_scheme_rows.scalars().all()
+            }
+        except SQLAlchemyError:
+            # Legacy schema fallback (no encryption_scheme column).
+            data["pii_mapping_scheme"] = {
+                token: "fernet" for token in data["pii_mapping_enc"].keys()
+            }
 
         # Backward compatibility for old Fernet rows only.
         reconstructed = data["content_redacted"]
@@ -99,6 +161,23 @@ async def get_archive_item(
         data["content"] = reconstructed
 
     return data
+
+
+def _detect_content_scheme(content_enc: str) -> str:
+    try:
+        payload = json.loads(content_enc)
+    except (TypeError, ValueError):
+        return "fernet"
+    if isinstance(payload, dict) and payload.get("scheme") == "rsa_aes_gcm":
+        return "rsa_aes_gcm"
+    return "fernet"
+
+
+def _safe_scheme(row: PiiVault) -> str:
+    try:
+        return row.encryption_scheme
+    except Exception:
+        return "fernet"
 
 
 @router.delete("/{item_id}")

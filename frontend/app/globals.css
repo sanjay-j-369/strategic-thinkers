@@ -65,9 +65,10 @@
     @apply bg-background text-foreground font-sans antialiased;
     text-rendering: optimizeLegibility;
     background-image:
-      linear-gradient(to right, hsl(var(--border) / 0.08) 1px, transparent 1px),
-      linear-gradient(to bottom, hsl(var(--border) / 0.08) 1px, transparent 1px);
-    background-size: 28px 28px;
+      radial-gradient(circle at top left, hsl(var(--primary) / 0.12), transparent 24rem),
+      linear-gradient(to right, hsl(var(--border) / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.05) 1px, transparent 1px);
+    background-size: auto, 28px 28px, 28px 28px;
   }
 
   /* Headings & Accents use the crisp pixel font */
@@ -96,6 +97,47 @@
 
   .chat-bubble-user {
     @apply bg-primary text-primary-foreground;
+  }
+
+  .panel-pro {
+    @apply border-2 border-border bg-card;
+    box-shadow: 10px 10px 0 hsl(var(--border));
+  }
+
+  .live-dot {
+    @apply inline-flex h-2.5 w-2.5 rounded-full bg-primary;
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.55);
+    animation: live-pulse 1.8s infinite;
+  }
+
+  .pipeline-bar {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .pipeline-bar::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, hsl(var(--primary) / 0.28), transparent);
+    animation: pipeline-flow 2.4s linear infinite;
+  }
+
+  .status-breathe {
+    animation: status-breathe 2.2s ease-in-out infinite;
+  }
+
+  .neo-marquee {
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .neo-marquee-track {
+    display: inline-flex;
+    min-width: max-content;
+    gap: 1.5rem;
+    animation: neo-marquee 22s linear infinite;
   }
 }
 
@@ -126,4 +168,45 @@ textarea {
 
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--primary) / 0.8);
+}
+
+@keyframes live-pulse {
+  0% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.45);
+    opacity: 0.9;
+  }
+  70% {
+    box-shadow: 0 0 0 10px hsl(var(--primary) / 0);
+    opacity: 1;
+  }
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
+    opacity: 0.85;
+  }
+}
+
+@keyframes pipeline-flow {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes status-breathe {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.82;
+  }
+  50% {
+    transform: translateY(-2px);
+    opacity: 1;
+  }
+}
+
+@keyframes neo-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
 }

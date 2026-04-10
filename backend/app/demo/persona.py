@@ -1,5 +1,6 @@
 import os
 import random
+import re
 import uuid
 from datetime import datetime, timezone
 
@@ -8,10 +9,15 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.archive import Archive
+from app.models.agent_notification import AgentNotification
+from app.models.agent_run import AgentRun
 from app.models.base import Base
+from app.models.draft_reply import DraftReply
 from app.models.pii_vault import PiiVault
+from app.models.promise_item import PromiseItem
 from app.models.startup_profile import StartupProfile
 from app.models.summary import Summary
+from app.models.task_queue import TaskQueue
 from app.models.user import User
 from app.pipeline.action_items import detect_action_item_signal
 from app.runtime.queue import enqueue_task_sync
@@ -111,6 +117,8 @@ DEMO_PROFILE = {
     "dev_spend_pct": 0.34,
 }
 
+PLACEHOLDER_PATTERN = re.compile(r"<[A-Z_]+_[a-f0-9]+>")
+
 
 def get_demo_user_id() -> uuid.UUID:
     return uuid.UUID(settings.DEMO_USER_ID)
@@ -169,17 +177,55 @@ def ensure_demo_persona(*, reset: bool = False) -> dict:
             profile.has_cto = DEMO_PROFILE["has_cto"]
             profile.dev_spend_pct = DEMO_PROFILE["dev_spend_pct"]
 
-        if reset:
-            session.execute(delete(Archive).where(Archive.user_id == demo_user_id))
-            session.execute(delete(Summary).where(Summary.user_id == demo_user_id))
-            session.execute(delete(PiiVault).where(PiiVault.user_id == demo_user_id))
+        should_reset = reset or _demo_state_has_placeholders(session, demo_user_id)
+        if should_reset:
+            _purge_demo_rows(session, demo_user_id)
 
         session.commit()
 
-    if reset:
+    if reset or should_reset:
         _purge_demo_vectors(str(demo_user_id))
 
     return {"user_id": str(demo_user_id)}
+
+
+def _purge_demo_rows(session: Session, demo_user_id: uuid.UUID) -> None:
+    session.execute(delete(Archive).where(Archive.user_id == demo_user_id))
+    session.execute(delete(Summary).where(Summary.user_id == demo_user_id))
+    session.execute(delete(PiiVault).where(PiiVault.user_id == demo_user_id))
+    session.execute(delete(AgentNotification).where(AgentNotification.user_id == demo_user_id))
+    session.execute(delete(PromiseItem).where(PromiseItem.user_id == demo_user_id))
+    session.execute(delete(DraftReply).where(DraftReply.user_id == demo_user_id))
+    session.execute(delete(AgentRun).where(AgentRun.user_id == demo_user_id))
+    session.execute(
+        delete(TaskQueue).where(
+            TaskQueue.payload["event"]["metadata"]["user_id"].astext == str(demo_user_id)
+        )
+    )
+
+
+def _demo_state_has_placeholders(session: Session, demo_user_id: uuid.UUID) -> bool:
+    recent_notifications = session.execute(
+        select(AgentNotification.body)
+        .where(AgentNotification.user_id == demo_user_id)
+        .order_by(AgentNotification.created_at.desc())
+        .limit(20)
+    ).scalars().all()
+    recent_promises = session.execute(
+        select(PromiseItem.promise_text)
+        .where(PromiseItem.user_id == demo_user_id)
+        .order_by(PromiseItem.created_at.desc())
+        .limit(20)
+    ).scalars().all()
+    recent_drafts = session.execute(
+        select(DraftReply.draft_text)
+        .where(DraftReply.user_id == demo_user_id)
+        .order_by(DraftReply.created_at.desc())
+        .limit(20)
+    ).scalars().all()
+
+    values = [*(recent_notifications or []), *(recent_promises or []), *(recent_drafts or [])]
+    return any(value and PLACEHOLDER_PATTERN.search(value) for value in values)
 
 
 def _enqueue_data_ingestion_event(

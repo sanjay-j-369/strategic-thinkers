@@ -149,6 +149,21 @@ def _validate_key_material(
         )
 
 
+def _safe_encrypted_private_key(user: User) -> str | None:
+    try:
+        return user.encrypted_private_key
+    except Exception:
+        # Legacy schema without E2EE columns.
+        return None
+
+
+def _safe_user_salt(user: User) -> str | None:
+    try:
+        return user.salt
+    except Exception:
+        return None
+
+
 @router.post("/signup")
 async def sign_up(body: SignUpBody, request: Request):
     email = _normalize_email(body.email)
@@ -176,7 +191,7 @@ async def sign_up(body: SignUpBody, request: Request):
                     return {
                         "token": create_access_token(user),
                         "user": user_public_dict(user),
-                        "encrypted_private_key": user.encrypted_private_key,
+                        "encrypted_private_key": _safe_encrypted_private_key(user),
                     }
                 raise HTTPException(
                     status_code=409,
@@ -203,7 +218,7 @@ async def sign_up(body: SignUpBody, request: Request):
     return {
         "token": create_access_token(user),
         "user": user_public_dict(user),
-        "encrypted_private_key": user.encrypted_private_key,
+        "encrypted_private_key": _safe_encrypted_private_key(user),
     }
 
 
@@ -220,12 +235,13 @@ async def key_salt(email: str, request: Request):
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if not user.salt:
+    user_salt = _safe_user_salt(user)
+    if not user_salt:
         raise HTTPException(
             status_code=409,
             detail="Account is missing E2EE key material. Re-run Sign Up with the same email to initialize it.",
         )
-    return {"salt": user.salt}
+    return {"salt": user_salt}
 
 
 @router.post("/signin")
@@ -254,7 +270,7 @@ async def sign_in(body: SignInBody, request: Request):
     return {
         "token": create_access_token(user),
         "user": user_public_dict(user),
-        "encrypted_private_key": user.encrypted_private_key,
+        "encrypted_private_key": _safe_encrypted_private_key(user),
     }
 
 

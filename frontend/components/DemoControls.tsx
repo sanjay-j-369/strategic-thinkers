@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
+  Activity,
   Inbox,
   MessageSquare,
   RefreshCw,
@@ -19,14 +20,17 @@ import { apiFetch } from "@/lib/api";
 
 const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
-export function DemoControls() {
-  const { token } = useAuth();
+export function DemoControls({ inline = false }: { inline?: boolean }) {
+  const { token, user } = useAuth();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<
-    "bootstrap" | "email" | "slack" | "prep" | "growth" | "reset" | null
+    "bootstrap" | "email" | "slack" | "prep" | "growth" | "reset" | "scenario" | null
   >(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [scenarios, setScenarios] = useState<
+    Array<{ name: string; event_count: number; sources: string[] }>
+  >([]);
 
   useEffect(() => {
     if (!DEMO_MODE) return;
@@ -41,6 +45,31 @@ export function DemoControls() {
     window.addEventListener("keydown", onKeydown);
     return () => window.removeEventListener("keydown", onKeydown);
   }, []);
+
+  useEffect(() => {
+    if (!DEMO_MODE || !token) return;
+    let active = true;
+
+    async function loadScenarios() {
+      try {
+        const data = await apiFetch<{
+          items: Array<{ name: string; event_count: number; sources: string[] }>;
+        }>("/api/demo/scenarios", { token });
+        if (active) {
+          setScenarios(data.items || []);
+        }
+      } catch {
+        if (active) {
+          setScenarios([]);
+        }
+      }
+    }
+
+    void loadScenarios();
+    return () => {
+      active = false;
+    };
+  }, [token]);
 
   async function runAction(
     action: "bootstrap" | "email" | "slack" | "prep" | "growth" | "reset",
@@ -70,16 +99,43 @@ export function DemoControls() {
     }
   }
 
+  async function runScenario(name: string) {
+    if (!DEMO_MODE || !token || !user?.id) return;
+    setBusy("scenario");
+    setError(null);
+    setStatus(null);
+    try {
+      const response = await apiFetch<{ queued?: number; scenario_name?: string }>(
+        "/api/demo/trigger-scenario",
+        {
+          method: "POST",
+          token,
+          json: {
+            user_id: user.id,
+            scenario_name: name,
+          },
+        }
+      );
+      setStatus(
+        `Scenario ${response.scenario_name || name} queued${response.queued ? ` (${response.queued} event${response.queued > 1 ? "s" : ""})` : ""}.`
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Scenario trigger failed.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   if (!DEMO_MODE) return null;
 
   return (
     <>
-      {!open ? (
+      {!inline && !open ? (
         <Button
           type="button"
           variant="secondary"
           size="sm"
-          className="fixed bottom-5 right-5 z-[60]"
+          className="fixed bottom-5 left-5 z-[60]"
           onClick={() => setOpen(true)}
         >
           <TerminalSquare className="h-4 w-4" />
@@ -87,26 +143,62 @@ export function DemoControls() {
         </Button>
       ) : null}
 
-      {open ? (
-        <div className="fixed inset-y-0 right-0 z-[70] w-full max-w-sm border-l border-border bg-card p-4 shadow-2xl backdrop-blur-xl">
-          <Card className="h-full border-border bg-zinc-950/90">
+      {(inline || open) ? (
+        <div
+          className={
+            inline
+              ? "w-full"
+              : "fixed inset-y-0 right-0 z-[70] w-full max-w-sm border-l border-border bg-card p-4 shadow-2xl backdrop-blur-xl"
+          }
+        >
+          <Card className={inline ? "border-border bg-card" : "h-full border-border bg-zinc-950/90"}>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="space-y-2">
-                  <Badge className="w-fit">Presenter Overlay</Badge>
+                  <Badge className="w-fit">{inline ? "Demo Actions" : "Presenter Overlay"}</Badge>
                   <CardTitle className="text-lg">Demo Command Center</CardTitle>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setOpen(false)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
+                {!inline ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setOpen(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                ) : null}
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
+              {scenarios.length > 0 ? (
+                <div className="space-y-2 rounded-2xl border border-border/70 bg-background/70 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="mono-label">Scenario Run</p>
+                    <Badge variant="outline">{scenarios.length}</Badge>
+                  </div>
+                  <div className="grid gap-2">
+                    {scenarios.map((scenario) => (
+                      <Button
+                        key={scenario.name}
+                        className="w-full justify-between"
+                        disabled={busy !== null}
+                        variant="outline"
+                        onClick={() => void runScenario(scenario.name)}
+                      >
+                        <span className="flex items-center gap-2">
+                          <Activity className="h-4 w-4" />
+                          {scenario.name.replace(/_/g, " ")}
+                        </span>
+                        <span className="text-[10px] uppercase tracking-[0.16em] opacity-70">
+                          {scenario.event_count} evt
+                        </span>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               <Button
                 className="w-full justify-start"
                 disabled={busy !== null}
@@ -116,7 +208,7 @@ export function DemoControls() {
                     "bootstrap",
                     "/api/demo/bootstrap",
                     "Full demo timeline queued.",
-                    { reset: false }
+                    { reset: true }
                   )
                 }
               >

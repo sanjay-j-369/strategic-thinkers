@@ -26,6 +26,14 @@ function mergeSignals(current: SignalItem[], incoming: SignalItem[]) {
   );
 }
 
+function sortSignals(items: SignalItem[]) {
+  return [...items].sort(
+    (a, b) =>
+      new Date(b.created_at || b.generated_at || 0).getTime() -
+      new Date(a.created_at || a.generated_at || 0).getTime()
+  );
+}
+
 export function useFounderFeed(userId: string, token?: string | null) {
   const [cards, setCards] = useState<SignalItem[]>([]);
   const ws = useRef<WebSocket | null>(null);
@@ -42,7 +50,7 @@ export function useFounderFeed(userId: string, token?: string | null) {
           { token }
         );
         if (!mounted) return;
-        setCards((prev) => mergeSignals(prev, data.items || []));
+        setCards(sortSignals(data.items || []));
       } catch {
         // Keep existing cards; websocket may still deliver live items.
       }
