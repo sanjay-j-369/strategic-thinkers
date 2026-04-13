@@ -5,6 +5,7 @@ from app.observability import observe_node
 from .nodes import AssistantState
 from .nodes import (
     compose_assistant_outputs,
+    detect_context_routing,
     detect_draft_candidates,
     detect_vip_interruptions,
     extract_commitments,
@@ -63,6 +64,18 @@ def build_assistant_graph():
         )(detect_vip_interruptions),
     )
     graph.add_node(
+        "detect_context_routing",
+        observe_node(
+            pillar="ASSISTANT",
+            agent_name="Chief of Staff",
+            node_name="detect_context_routing",
+            start_message="[Assistant] Looking for juggling-style context routing opportunities.",
+            end_message=lambda _state, result: (
+                f"[Assistant] Prepared {len(result.get('routing_tasks', []))} context routing draft(s)."
+            ),
+        )(detect_context_routing),
+    )
+    graph.add_node(
         "compose_assistant_outputs",
         observe_node(
             pillar="ASSISTANT",
@@ -78,6 +91,7 @@ def build_assistant_graph():
     graph.add_edge("load_recent_communications", "extract_commitments")
     graph.add_edge("extract_commitments", "detect_draft_candidates")
     graph.add_edge("detect_draft_candidates", "detect_vip_interruptions")
-    graph.add_edge("detect_vip_interruptions", "compose_assistant_outputs")
+    graph.add_edge("detect_vip_interruptions", "detect_context_routing")
+    graph.add_edge("detect_context_routing", "compose_assistant_outputs")
     graph.add_edge("compose_assistant_outputs", END)
     return graph.compile()

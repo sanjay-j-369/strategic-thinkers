@@ -5,14 +5,14 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap border-2 border-border text-sm font-pixel transition-colors active:translate-y-1 active:translate-x-1 outline-none disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center whitespace-nowrap border border-border text-sm font-pixel transition-colors active:translate-y-1 active:translate-x-1 outline-none disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
-        default: "shadow-pixel bg-primary text-primary-foreground hover:bg-primary/90 active:shadow-pixel-pressed",
-        destructive: "shadow-pixel bg-destructive text-destructive-foreground hover:bg-destructive/90 active:shadow-pixel-pressed",
-        outline: "shadow-pixel bg-background text-foreground hover:bg-accent hover:text-accent-foreground active:shadow-pixel-pressed",
-        secondary: "shadow-pixel bg-secondary text-secondary-foreground hover:bg-secondary/80 active:shadow-pixel-pressed",
+        default: " bg-primary text-primary-foreground hover:bg-primary/90 active:-pressed",
+        destructive: " bg-destructive text-destructive-foreground hover:bg-destructive/90 active:-pressed",
+        outline: " bg-background text-foreground hover:bg-accent hover:text-accent-foreground active:-pressed",
+        secondary: " bg-secondary text-secondary-foreground hover:bg-secondary/80 active:-pressed",
         ghost: "border-transparent bg-transparent hover:bg-accent hover:text-accent-foreground active:translate-y-0 active:translate-x-0",
         link: "text-primary underline-offset-4 hover:underline active:translate-y-0 active:translate-x-0",
       },
@@ -20,7 +20,7 @@ const buttonVariants = cva(
         default: "h-10 px-4 py-2 uppercase tracking-widest",
         sm: "h-9 px-3 uppercase tracking-widest text-xs",
         lg: "h-11 px-8 uppercase tracking-widest text-base",
-        icon: "shadow-pixel-sm h-10 w-10 active:shadow-pixel-pressed",
+        icon: "-sm h-10 w-10 active:-pressed",
       },
     },
     defaultVariants: {

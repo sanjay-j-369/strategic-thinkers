@@ -22,6 +22,7 @@ import { apiFetch } from "@/lib/api";
 import {
   deriveMasterKey,
   exportPublicKeyPem,
+  exportPrivateKeyPem,
   generateKeyPair,
   generateSalt,
   unwrapPrivateKey,
@@ -36,6 +37,7 @@ export default function SignUpPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [securityMode, setSecurityMode] = useState<"magic" | "vault">("magic");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,11 +59,19 @@ export default function SignUpPage() {
     setError(null);
 
     try {
-      const salt = generateSalt();
-      const masterKey = await deriveMasterKey(password, salt);
       const keyPair = await generateKeyPair();
       const publicKey = await exportPublicKeyPem(keyPair.publicKey);
-      const encryptedPrivateKey = await wrapPrivateKey(keyPair.privateKey, masterKey);
+      let salt: string | undefined;
+      let encryptedPrivateKey: string | undefined;
+      let rawPrivateKey: string | undefined;
+
+      if (securityMode === "vault") {
+        salt = generateSalt();
+        const masterKey = await deriveMasterKey(password, salt);
+        encryptedPrivateKey = await wrapPrivateKey(keyPair.privateKey, masterKey);
+      } else {
+        rawPrivateKey = await exportPrivateKeyPem(keyPair.privateKey);
+      }
 
       const data = await apiFetch<{
         token: string;
@@ -73,19 +83,24 @@ export default function SignUpPage() {
           full_name: fullName,
           email,
           password,
+          security_mode: securityMode,
           salt,
           public_key: publicKey,
           encrypted_private_key: encryptedPrivateKey,
+          raw_private_key: rawPrivateKey,
         },
       });
-      if (data.encrypted_private_key === encryptedPrivateKey) {
+      if (securityMode === "vault" && data.encrypted_private_key === encryptedPrivateKey) {
         setPrivateKey(keyPair.privateKey);
-      } else if (data.encrypted_private_key) {
+      } else if (securityMode === "vault" && data.encrypted_private_key && salt) {
+        const masterKey = await deriveMasterKey(password, salt);
         const restoredPrivateKey = await unwrapPrivateKey(
           data.encrypted_private_key,
           masterKey
         );
         setPrivateKey(restoredPrivateKey);
+      } else {
+        setPrivateKey(keyPair.privateKey);
       }
       setSession(data.token, data.user);
       router.replace(redirectTo);
@@ -98,7 +113,7 @@ export default function SignUpPage() {
 
   return (
     <div className="grid min-h-[calc(100vh-10rem)] items-center gap-5 xl:grid-cols-[minmax(0,1fr)_480px]">
-      <Card className="border-2 border-border bg-card shadow-pixel bg-card">
+      <Card className="border border-border bg-card  bg-card">
         <CardHeader>
           <Badge className="w-fit">New Account</Badge>
           <CardTitle className="max-w-2xl font-sans text-4xl font-black uppercase tracking-[-0.05em]">
@@ -109,7 +124,7 @@ export default function SignUpPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="border-2 border-border px-4 py-4 shadow-pixel bg-background">
+          <div className="border border-border px-4 py-4  bg-background">
             <p className="mono-label text-foreground/50">What gets created</p>
             <p className="mt-3 text-sm leading-7 text-foreground/75">
               A private operator workspace with notifications, meetings, promises, drafts, archive memory, and connected-source sync.
@@ -118,7 +133,7 @@ export default function SignUpPage() {
         </CardContent>
       </Card>
 
-      <Card className="border-2 border-border bg-card shadow-pixel">
+      <Card className="border border-border bg-card ">
         <CardHeader>
           <Badge variant="secondary" className="w-fit">
             Sign Up
@@ -158,6 +173,40 @@ export default function SignUpPage() {
                 placeholder="At least 8 characters"
                 required
               />
+            </div>
+
+            <div className="space-y-3">
+              <Label>Security Mode</Label>
+              <div className="grid gap-0 border border-neutral-300 md:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setSecurityMode("magic")}
+                  className={`grid gap-2 px-4 py-4 text-left ${
+                    securityMode === "magic" ? "bg-black text-white" : "bg-white text-black"
+                  }`}
+                >
+                  <span className="text-xs font-black uppercase tracking-[0.18em]">
+                    Magic Mode (Recommended)
+                  </span>
+                  <span className="text-sm leading-6 opacity-80">
+                    Allow Founder OS to draft emails and send background reports 24/7.
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSecurityMode("vault")}
+                  className={`grid gap-2 border-t border-neutral-300 px-4 py-4 text-left md:border-l md:border-t-0 ${
+                    securityMode === "vault" ? "bg-black text-white" : "bg-white text-black"
+                  }`}
+                >
+                  <span className="text-xs font-black uppercase tracking-[0.18em]">
+                    Vault Mode
+                  </span>
+                  <span className="text-sm leading-6 opacity-80">
+                    Maximum security. Founder OS cannot read data offline. You must open the app to sync drafts.
+                  </span>
+                </button>
+              </div>
             </div>
 
             {error ? (

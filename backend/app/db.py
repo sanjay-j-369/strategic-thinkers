@@ -13,11 +13,18 @@ COMPATIBILITY_DDL = [
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS slack_team_id VARCHAR(255)",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS slack_channel_ids TEXT",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS salt VARCHAR(255)",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS public_key TEXT",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS encrypted_private_key TEXT",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS server_encrypted_private_key TEXT",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS security_mode VARCHAR(24) DEFAULT 'magic' NOT NULL",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS google_last_synced_at TIMESTAMP WITH TIME ZONE",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS slack_last_synced_at TIMESTAMP WITH TIME ZONE",
     "ALTER TABLE summaries ADD COLUMN IF NOT EXISTS source_ref VARCHAR(255)",
     "ALTER TABLE archive ADD COLUMN IF NOT EXISTS content_redacted TEXT",
     "ALTER TABLE archive ADD COLUMN IF NOT EXISTS pii_tokens JSONB",
+    "ALTER TABLE pii_vault ADD COLUMN IF NOT EXISTS encryption_scheme VARCHAR(50) DEFAULT 'fernet' NOT NULL",
+    "ALTER TABLE worker_agents ADD COLUMN IF NOT EXISTS config JSONB DEFAULT '{}'::jsonb NOT NULL",
 ]
 
 

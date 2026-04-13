@@ -8,13 +8,12 @@ function resolvedApiUrl(): string {
     return "/backend-api";
   }
 
-  const browserHost = window.location.hostname;
-  const isBrowserLocal = browserHost === "localhost" || browserHost === "127.0.0.1";
+  const configuredIsRelative = configured.startsWith("/");
   const configuredIsLocal =
     configured.includes("localhost") || configured.includes("127.0.0.1");
 
-  // If app is opened on a non-local hostname/tunnel, avoid browser localhost calls.
-  if (!isBrowserLocal && configuredIsLocal) {
+  // In the browser, prefer the Next.js reverse proxy over direct localhost calls.
+  if (configuredIsRelative || configuredIsLocal) {
     return "/backend-api";
   }
 

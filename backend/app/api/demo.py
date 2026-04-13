@@ -324,3 +324,13 @@ async def reset_demo(request: Request):
     )
 
     return {"status": "reset-and-queued", **queued}
+
+@router.get("/users")
+async def list_demo_users(request: Request):
+    from sqlalchemy import select
+    from app.models import User
+    
+    async with request.app.state.async_session() as session:
+        result = await session.execute(select(User))
+        users = result.scalars().all()
+        return {"users": [{"id": str(u.id), "email": u.email, "full_name": u.full_name} for u in users]}

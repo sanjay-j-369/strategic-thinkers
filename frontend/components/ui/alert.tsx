@@ -3,7 +3,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
 
-const alertVariants = cva("shadow-pixel border-2 border-border p-4", {
+const alertVariants = cva(" border border-border p-4", {
   variants: {
     variant: {
       default: "bg-card text-card-foreground",

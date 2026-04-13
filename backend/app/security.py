@@ -112,10 +112,26 @@ def decode_access_token(token: str) -> dict:
 
 
 def user_public_dict(user: User) -> dict:
+    try:
+        public_key = user.__dict__.get("public_key")
+    except Exception:
+        public_key = None
+
+    try:
+        security_mode = (
+            user.security_mode.value
+            if hasattr(user.security_mode, "value")
+            else str(user.security_mode)
+        )
+    except Exception:
+        security_mode = "magic"
+
     return {
         "id": str(user.id),
         "email": user.email,
         "full_name": user.full_name,
+        "security_mode": security_mode,
+        "public_key": public_key,
         "created_at": user.created_at.isoformat(),
         "google_connected": bool(user.google_token),
         "slack_connected": bool(user.slack_token),

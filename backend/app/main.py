@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.ws import manager
 from app.api import demo as demo_api
-from app.api.routes import auth, summaries, guide, privacy, simulate, ingest, meetings, chat, ops
+from app.api.routes import auth, summaries, guide, privacy, simulate, ingest, meetings, chat, ops, gmail, workers
 from app.config import settings
 from app.db import build_async_engine, build_session_factory, init_database
 from app.runtime.notifier import InMemoryNotificationBus
@@ -57,6 +57,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(gmail.router)
 app.include_router(summaries.router)
 app.include_router(guide.router)
 app.include_router(privacy.router)
@@ -66,6 +67,7 @@ app.include_router(meetings.router)
 app.include_router(chat.router)
 app.include_router(demo_api.router)
 app.include_router(ops.router)
+app.include_router(workers.router)
 
 
 @app.websocket("/ws/admin/logs")

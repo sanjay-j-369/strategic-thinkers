@@ -22,10 +22,13 @@ DRAFT_TRIGGERS = {
 
 class AssistantState(TypedDict):
     user_id: str
+    user_email: str
+    security_mode: str
     mode: str
     recent_items: list[dict]
     promises: list[dict]
     drafts: list[dict]
+    routing_tasks: list[dict]
     vip_alerts: list[dict]
     notifications: list[dict]
     morning_briefing: str
@@ -112,6 +115,62 @@ def detect_vip_interruptions(state: AssistantState) -> AssistantState:
     return {**state, "vip_alerts": alerts}
 
 
+def detect_context_routing(state: AssistantState) -> AssistantState:
+    routing_tasks: list[dict] = []
+    security_mode = state.get("security_mode", "magic")
+    for item in state.get("recent_items", []):
+        text = item.get("text", "")
+        lowered = text.lower()
+        if item.get("source") != "SLACK":
+            continue
+        if not any(keyword in lowered for keyword in ("deployed", "shipped", "launched", "live", "closed")):
+            continue
+
+        related_promise = next(
+            (
+                promise
+                for promise in state.get("promises", [])
+                if any(term in promise.get("promise_text", "").lower() for term in ("investor", "partner", "customer"))
+            ),
+            None,
+        )
+        if not related_promise:
+            continue
+
+        stakeholder = "Investor"
+        if "customer" in related_promise.get("promise_text", "").lower():
+            stakeholder = "Customer"
+        subject = f"Update for {stakeholder}: recent product milestone"
+        if security_mode == "magic":
+            body = (
+                f"Assistant drafted an update to {stakeholder} based on recent Slack activity.\n\n"
+                f"Slack signal: {text[:220]}\n\n"
+                f"Promise context: {related_promise.get('promise_text', '')[:220]}"
+            )
+        else:
+            body = (
+                f"Assistant drafted a vault-safe update to {stakeholder} based on recent Slack activity.\n\n"
+                "Resolve private names and deliver this from the app."
+            )
+        routing_tasks.append(
+            {
+                "source_ref": item.get("id"),
+                "channel": "email",
+                "prompt": subject,
+                "draft_text": body,
+                "context_payload": {
+                    "draft_type": "CONTEXT_ROUTING",
+                    "source": item.get("source"),
+                    "source_topic": item.get("topic"),
+                    "stakeholder": stakeholder,
+                    "promise_ref": related_promise.get("source_ref"),
+                    "security_mode": security_mode,
+                },
+            }
+        )
+    return {**state, "routing_tasks": routing_tasks}
+
+
 def compose_assistant_outputs(state: AssistantState) -> AssistantState:
     snippets = []
     for item in state.get("recent_items", [])[:8]:
@@ -162,6 +221,17 @@ def compose_assistant_outputs(state: AssistantState) -> AssistantState:
                 "payload": {"count": len(state["drafts"])},
             }
         )
+    if state.get("routing_tasks"):
+        routing = state["routing_tasks"][0]
+        notifications.append(
+            {
+                "notification_type": "CONTEXT_ROUTING_READY",
+                "severity": "info",
+                "title": f"Assistant drafted an update to {routing.get('context_payload', {}).get('stakeholder', 'stakeholder')}",
+                "body": f"Assistant drafted an update based on recent {routing.get('context_payload', {}).get('source', 'activity')}.",
+                "payload": routing.get("context_payload"),
+            }
+        )
     if state["mode"] == "ingestion_watch" and not notifications:
         # Ensure ingestion-triggered assistant runs are visible in the feed.
         notifications.append(
@@ -179,6 +249,7 @@ def compose_assistant_outputs(state: AssistantState) -> AssistantState:
 
     return {
         **state,
+        "drafts": [*state.get("drafts", []), *state.get("routing_tasks", [])],
         "morning_briefing": briefing.strip() or fallback_brief,
         "notifications": notifications,
     }

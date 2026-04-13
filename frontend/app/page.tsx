@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Activity, AlarmClock, ArrowRight, Bell, BriefcaseBusiness, Inbox, Layers3, Sparkles, Waves } from "lucide-react";
+import { Activity, AlarmClock, ArrowRight, Bell, BriefcaseBusiness, Inbox, Layers3, Lock, Sparkles, Waves } from "lucide-react";
 
 import { SignalCard, type SignalItem } from "@/components/SignalCard";
+import { DraftReviewer } from "@/components/DraftReviewer";
 import { useAuth } from "@/components/providers/auth-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -67,6 +68,23 @@ interface OpsStatus {
   }>;
 }
 
+interface WorkerItem {
+  id: string;
+  worker_key: string;
+  name: string;
+  description: string;
+  status: string;
+  config: {
+    monitor_targets?: string;
+    auto_draft_replies?: boolean;
+    daily_digest_emails?: boolean;
+    custom_instructions?: string;
+  };
+  security_mode: "vault" | "magic";
+  live_status: string;
+  updated_at?: string | null;
+}
+
 interface AdminLogEvent {
   type: string;
   log_id: string;
@@ -108,6 +126,7 @@ export default function FeedPage() {
   const [drafts, setDrafts] = useState<DraftItem[]>([]);
   const [snapshot, setSnapshot] = useState<any | null>(null);
   const [opsStatus, setOpsStatus] = useState<OpsStatus | null>(null);
+  const [workers, setWorkers] = useState<WorkerItem[]>([]);
   const [piiMap, setPiiMap] = useState<Record<string, string>>({});
   const [logs, setLogs] = useState<AdminLogEvent[]>([]);
   const [socketState, setSocketState] = useState<"connecting" | "open" | "closed">("closed");
@@ -120,20 +139,23 @@ export default function FeedPage() {
 
     async function loadOps() {
       try {
-        const [promiseData, draftData, statusData] = await Promise.all([
+        const [promiseData, draftData, statusData, workerData] = await Promise.all([
           apiFetch<{ items: PromiseItem[] }>("/api/ops/promises?limit=6", { token }),
           apiFetch<{ items: DraftItem[] }>("/api/ops/drafts?limit=4", { token }),
           apiFetch<OpsStatus>("/api/ops/system-status", { token }),
+          apiFetch<{ items: WorkerItem[] }>("/api/workers", { token }),
         ]);
         if (!active) return;
         setPromises(promiseData.items || []);
         setDrafts(draftData.items || []);
         setOpsStatus(statusData);
+        setWorkers((workerData.items || []).filter((worker) => worker.status === "hired"));
       } catch {
         if (!active) return;
         setPromises([]);
         setDrafts([]);
         setOpsStatus(null);
+        setWorkers([]);
       }
     }
 
@@ -308,12 +330,13 @@ export default function FeedPage() {
   );
   const dashboardMetrics = opsStatus
     ? [
-        { label: "Queue backlog", value: opsStatus.queue.counts.pending, accent: "bg-primary text-primary-foreground" },
+        { label: "Tasks in Progress", value: opsStatus.queue.counts.pending, accent: "bg-primary text-primary-foreground" },
         { label: "Running now", value: opsStatus.queue.counts.running, accent: "bg-background text-foreground" },
         { label: "Active workers", value: opsStatus.workers.active_runs, accent: "bg-background text-foreground" },
-        { label: "Socket links", value: opsStatus.websocket.user_connections, accent: "bg-primary text-primary-foreground" },
+        { label: "Live Sync Status", value: opsStatus.websocket.user_connections, accent: "bg-primary text-primary-foreground" },
       ]
     : [];
+  const hiredWorkers = workers;
 
   return (
     <div className="space-y-8">
@@ -323,6 +346,12 @@ export default function FeedPage() {
             <div className="flex flex-wrap items-center gap-2">
               <Badge>Active AI Organization</Badge>
               <Badge variant="outline">Workers / Assistant / Mentor</Badge>
+              {user?.security_mode ? (
+                <span className="inline-flex items-center gap-2 border border-primary-foreground/25 px-3 py-1 text-xs uppercase tracking-[0.18em] text-primary-foreground/80">
+                  {user.security_mode === "vault" ? <Lock className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  {user.security_mode === "vault" ? "Vault Mode Active" : "Magic Mode Active"}
+                </span>
+              ) : null}
               <span className="inline-flex items-center gap-2 rounded-full border border-primary-foreground/25 px-3 py-1 text-xs uppercase tracking-[0.18em] text-primary-foreground/80">
                 <span className="live-dot bg-primary-foreground" />
                 Live pipeline
@@ -376,28 +405,30 @@ export default function FeedPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
-            <div className="border-2 border-border px-4 py-4 shadow-pixel bg-background text-foreground">
+            <div className="border border-border px-4 py-4  bg-background text-foreground">
               <p className="mono-label text-foreground/50">Current identity</p>
               <p className="mt-2 text-2xl font-black uppercase tracking-tight">
                 {user?.full_name || user?.email || "anonymous"}
               </p>
             </div>
-            <div className="border-2 border-border px-4 py-4 shadow-pixel bg-primary text-primary-foreground">
+            <div className="border border-border px-4 py-4  bg-primary text-primary-foreground">
               <p className="mono-label text-primary-foreground/60">Signal volume</p>
               <p className="mt-2 text-4xl font-black">{signals.length}</p>
             </div>
-            {demoMode && snapshot?.profile ? (
-              <div className="border-2 border-border px-4 py-4 shadow-pixel bg-background text-foreground">
-                <p className="mono-label text-foreground/60">Demo runway</p>
-                <p className="mt-2 text-3xl font-black">{snapshot.profile.runway_months ?? "-"} mo</p>
-                <p className="mt-1 text-sm font-medium">${Math.round(snapshot.profile.mrr_usd || 0).toLocaleString()} MRR</p>
-              </div>
-            ) : null}
+            <div className="border border-border px-4 py-4  bg-background text-foreground">
+              <p className="mono-label text-foreground/60">Runway</p>
+              <p className="mt-2 text-3xl font-bold tracking-tighter">
+                {demoMode && user?.email === "alex@demo-founders.ai" && snapshot?.profile ? `${snapshot.profile.runway_months ?? "-"} mo` : "0 mo"}
+              </p>
+              <p className="mt-1 text-sm font-medium">
+                {demoMode && user?.email === "alex@demo-founders.ai" && snapshot?.profile ? `$${Math.round(snapshot.profile.mrr_usd || 0).toLocaleString()} MRR` : "Connect Data"}
+              </p>
+            </div>
           </CardContent>
         </Card>
       </section>
 
-      <section className="neo-marquee border-2 border-border bg-foreground py-3 text-background">
+      <section className="neo-marquee border border-border bg-foreground py-3 text-background">
         <div className="neo-marquee-track text-sm font-black uppercase tracking-[0.24em]">
           <span>Founder OS</span>
           <span>Live Pipeline</span>
@@ -416,10 +447,10 @@ export default function FeedPage() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {metrics.map(({ label, value, icon: Icon }, index) => (
-          <Card key={label} className="border-2 border-border bg-card shadow-pixel">
+          <Card key={label} className="border border-border bg-card ">
             <CardContent className="pt-6">
               <div
-                className={`mb-4 flex h-12 w-12 items-center justify-center border-2 border-border ${
+                className={`mb-4 flex h-12 w-12 items-center justify-center border border-border ${
                   index % 2 === 0 ? "bg-primary text-primary-foreground" : "bg-background text-foreground"
                 }`}
               >
@@ -443,11 +474,11 @@ export default function FeedPage() {
                   Live state
                 </span>
               </div>
-              <CardTitle className="font-sans text-3xl font-black uppercase tracking-[-0.05em]">
-                Queue and worker status
+              <CardTitle className="font-sans text-3xl font-bold tracking-tighter uppercase tracking-[-0.05em]">
+                System Status
               </CardTitle>
               <CardDescription className="text-base">
-                Live view of the task runner, queue pressure, active worker lanes, and the founder events currently moving through ingestion.
+                Live view of the system, active tasks in progress, and recent activity moving through the pipeline.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
@@ -469,8 +500,8 @@ export default function FeedPage() {
 
                   <div className="grid gap-3 md:grid-cols-3">
                     <div className="rounded-[1.2rem] border border-border/70 px-4 py-4 shadow-lg bg-background">
-                      <p className="mono-label text-foreground/50">Task runner</p>
-                      <p className="mt-2 flex items-center gap-3 text-2xl font-black uppercase text-foreground">
+                      <p className="mono-label text-foreground/50">System Status</p>
+                      <p className="mt-2 flex items-center gap-3 text-2xl font-bold tracking-tighter uppercase text-foreground">
                         <span className="live-dot" />
                         {opsStatus.runner.status}
                       </p>
@@ -479,20 +510,24 @@ export default function FeedPage() {
                       </p>
                     </div>
                     <div className="rounded-[1.2rem] border border-border/70 px-4 py-4 shadow-lg bg-background">
-                      <p className="mono-label text-foreground/50">Your queue</p>
-                      <p className="mt-2 text-2xl font-black uppercase text-foreground">
-                        {opsStatus.queue.user_counts.pending} pending / {opsStatus.queue.user_counts.running} running
-                      </p>
+                      <p className="mono-label text-foreground/50">Queue</p>
+                      {opsStatus.queue.user_counts.pending === 0 && opsStatus.queue.user_counts.running === 0 ? (
+                        <p className="mt-2 text-sm text-foreground/70 font-bold">Your AI organization is fully caught up. No pending blockers.</p>
+                      ) : (
+                        <p className="mt-2 text-2xl font-bold tracking-tighter uppercase text-foreground">
+                          {opsStatus.queue.user_counts.pending} pending / {opsStatus.queue.user_counts.running} running
+                        </p>
+                      )}
                       <p className="mt-1 text-sm text-foreground/65">
                         Founder-specific tasks waiting or executing
                       </p>
                     </div>
                     <div className="rounded-[1.2rem] border border-border/70 px-4 py-4 shadow-lg bg-background">
-                      <p className="mono-label text-foreground/50">Worker lanes</p>
-                      <p className="mt-2 text-2xl font-black uppercase text-foreground">
+                      <p className="mono-label text-foreground/50">AI Assistant Focus</p>
+                      <p className="mt-2 text-2xl font-bold tracking-tighter uppercase text-foreground">
                         {Object.entries(opsStatus.workers.by_pillar)
                           .map(([pillar, count]) => `${pillar.toLowerCase()}:${count}`)
-                          .join(" / ") || "idle"}
+                          .join(" / ") || "Monitoring Slack/Email"}
                       </p>
                       <p className="mt-1 text-sm text-foreground/65">
                         Active agent runs by pillar
@@ -503,9 +538,59 @@ export default function FeedPage() {
                   <div className="space-y-3">
                     <div className="flex items-end justify-between gap-3">
                       <div>
+                        <p className="mono-label text-foreground/50">Active workers</p>
+                        <h3 className="mt-2 text-2xl font-bold tracking-tighter uppercase tracking-tight text-foreground">
+                          Worker Runtime
+                        </h3>
+                      </div>
+                      <Button asChild variant="link" className="h-auto p-0 text-xs font-black uppercase tracking-[0.18em]">
+                        <Link href="/workers">+ Hire more workers</Link>
+                      </Button>
+                    </div>
+
+                    {hiredWorkers.length === 0 ? (
+                      <div className="border border-border px-4 py-8  bg-background text-center text-sm text-foreground/60">
+                        No workers are hired yet. Provision them from the worker directory.
+                      </div>
+                    ) : (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {hiredWorkers.map((worker) => (
+                          <div
+                            key={worker.worker_key}
+                            className="status-breathe rounded-[1.2rem] border border-border/70 px-4 py-4 shadow-lg bg-background"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <p className="flex items-center gap-2 text-lg font-black uppercase tracking-tight text-foreground">
+                                  <Activity className="h-4 w-4 text-primary" />
+                                  {worker.name}
+                                </p>
+                                <p className="text-sm text-foreground/60">
+                                  {worker.description}
+                                </p>
+                              </div>
+                              <Badge variant="outline">{worker.live_status}</Badge>
+                            </div>
+                            <p className="mt-3 text-sm leading-7 text-foreground/75">
+                              Monitoring: {worker.config.monitor_targets || "Default routing"}
+                            </p>
+                            <p className="text-xs uppercase tracking-[0.18em] text-foreground/50">
+                              {worker.security_mode === "vault"
+                                ? "Vault Mode: local sync required"
+                                : `Magic Mode: digest emails ${worker.config.daily_digest_emails ? "enabled" : "disabled"}`}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-end justify-between gap-3">
+                      <div>
                         <p className="mono-label text-foreground/50">Current ingestion</p>
-                        <h3 className="mt-2 text-2xl font-black uppercase tracking-tight text-foreground">
-                          In-flight founder events
+                        <h3 className="mt-2 text-2xl font-bold tracking-tighter uppercase tracking-tight text-foreground">
+                          Recent Activity
                         </h3>
                       </div>
                       <Badge variant="outline">
@@ -514,7 +599,7 @@ export default function FeedPage() {
                     </div>
 
                     {opsStatus.active_ingestions.length === 0 ? (
-                      <div className="border-2 border-border px-4 py-8 shadow-pixel bg-background text-center text-sm text-foreground/60">
+                      <div className="border border-border px-4 py-8  bg-background text-center text-sm text-foreground/60">
                         No user ingestion tasks are pending or running right now.
                       </div>
                     ) : (
@@ -551,7 +636,7 @@ export default function FeedPage() {
                   </div>
                 </>
               ) : (
-                <div className="border-2 border-border px-4 py-12 shadow-pixel bg-background text-center text-sm text-foreground/60">
+                <div className="border border-border px-4 py-12  bg-background text-center text-sm text-foreground/60">
                   Runtime status unavailable.
                 </div>
               )}
@@ -584,7 +669,7 @@ export default function FeedPage() {
                     </div>
                   ))
               ) : (
-                <div className="border-2 border-border px-4 py-8 shadow-pixel bg-background text-center text-sm text-foreground/60">
+                <div className="border border-border px-4 py-8  bg-background text-center text-sm text-foreground/60">
                   No queue data yet.
                 </div>
               )}
@@ -618,7 +703,7 @@ export default function FeedPage() {
                 className="max-h-[460px] overflow-y-auto bg-foreground p-4 font-mono text-xs text-background"
               >
                 {logs.length === 0 ? (
-                  <div className="rounded-[1rem] border-2 border-dashed border-background/35 px-4 py-8 text-background/60">
+                  <div className="rounded-[1rem] border border-dashed border-background/35 px-4 py-8 text-background/60">
                     Waiting for runtime logs. Trigger a demo scenario from the bottom-left demo control.
                   </div>
                 ) : (
@@ -651,15 +736,15 @@ export default function FeedPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3">
-              <div className="border-2 border-border px-4 py-4 shadow-pixel bg-background">
+              <div className="border border-border px-4 py-4  bg-background">
                 <p className="mono-label text-foreground/50">Archive items</p>
                 <p className="mt-2 text-4xl font-black">{snapshot?.archive_count ?? 0}</p>
               </div>
-              <div className="border-2 border-border px-4 py-4 shadow-pixel bg-background">
+              <div className="border border-border px-4 py-4  bg-background">
                 <p className="mono-label text-foreground/50">Summaries</p>
                 <p className="mt-2 text-4xl font-black">{snapshot?.summary_count ?? 0}</p>
               </div>
-              <div className="border-2 border-border px-4 py-4 shadow-pixel bg-background">
+              <div className="border border-border px-4 py-4  bg-background">
                 <p className="mono-label text-foreground/50">Log stream</p>
                 <p className="mt-2 text-4xl font-black">{logs.length}</p>
               </div>
@@ -682,13 +767,13 @@ export default function FeedPage() {
           </div>
 
           {loading ? (
-            <Card className="border-2 border-border bg-card shadow-pixel">
+            <Card className="border border-border bg-card ">
               <CardContent className="py-20 text-center text-sm text-foreground/60">
                 Loading operator surface...
               </CardContent>
             </Card>
           ) : !isAuthenticated ? (
-            <Card className="border-2 border-border bg-card shadow-pixel">
+            <Card className="border border-border bg-card ">
               <CardContent className="space-y-4 py-16 text-center">
                 <Layers3 className="mx-auto h-10 w-10 text-foreground" />
                 <h3 className="text-2xl font-black uppercase text-foreground">Private feed locked</h3>
@@ -698,7 +783,7 @@ export default function FeedPage() {
               </CardContent>
             </Card>
           ) : featured.length === 0 ? (
-            <Card className="border-2 border-border bg-card shadow-pixel">
+            <Card className="border border-border bg-card ">
               <CardContent className="space-y-4 py-16 text-center">
                 <Bell className="mx-auto h-10 w-10 text-foreground" />
                 <h3 className="text-2xl font-black uppercase text-foreground">Waiting for the first signal</h3>
@@ -724,46 +809,7 @@ export default function FeedPage() {
         </div>
 
         <div className="space-y-4">
-          <Card className="border-2 border-border bg-card shadow-pixel bg-card">
-            <CardHeader>
-              <Badge variant="outline">Promise tracker</Badge>
-              <CardTitle className="font-sans text-2xl font-black uppercase tracking-tight">Open commitments</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {visiblePromises.length === 0 ? (
-                <p className="text-sm leading-7 text-foreground/60">No open promises detected yet.</p>
-              ) : (
-                visiblePromises.map((item) => (
-                  <div key={item.id} className="border-2 border-border px-4 py-4 shadow-pixel bg-background">
-                    <p className="text-sm font-medium leading-7 text-foreground">{item.promise_text}</p>
-                    <p className="mt-2 text-xs uppercase tracking-[0.18em] text-foreground/45">
-                      {new Date(item.created_at).toLocaleString()}
-                    </p>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-2 border-border bg-card shadow-pixel bg-card">
-            <CardHeader>
-              <Badge variant="outline">Auto drafting</Badge>
-              <CardTitle className="font-sans text-2xl font-black uppercase tracking-tight">Draft queue</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {visibleDrafts.length === 0 ? (
-                <p className="text-sm leading-7 text-foreground/60">No suggested replies are waiting for review.</p>
-              ) : (
-                visibleDrafts.map((item) => (
-                  <div key={item.id} className="border-2 border-border px-4 py-4 shadow-pixel bg-background">
-                    <p className="mono-label text-foreground/50">{item.channel}</p>
-                    <p className="mt-2 text-sm font-semibold uppercase tracking-[0.08em] text-foreground">{item.prompt}</p>
-                    <p className="mt-3 text-sm leading-7 text-foreground/75">{item.draft_text.slice(0, 180)}{item.draft_text.length > 180 ? "..." : ""}</p>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
+          <DraftReviewer />
         </div>
       </section>
     </div>

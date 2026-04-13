@@ -1,9 +1,15 @@
+import enum
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import DateTime, String, Text
+from sqlalchemy import DateTime, Enum, String, Text
 from sqlalchemy.orm import Mapped, deferred, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 from .base import Base
+
+
+class SecurityMode(str, enum.Enum):
+    VAULT = "vault"
+    MAGIC = "magic"
 
 
 class User(Base):
@@ -14,6 +20,15 @@ class User(Base):
     )
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    security_mode: Mapped[SecurityMode] = mapped_column(
+        Enum(
+            SecurityMode,
+            native_enum=False,
+            values_callable=lambda enum_cls: [item.value for item in enum_cls],
+        ),
+        nullable=False,
+        default=SecurityMode.MAGIC,
+    )
     password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     google_token: Mapped[str | None] = mapped_column(String, nullable=True)
     slack_token: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -24,6 +39,9 @@ class User(Base):
     salt: Mapped[str | None] = deferred(mapped_column(String(255), nullable=True))
     public_key: Mapped[str | None] = deferred(mapped_column(Text, nullable=True))
     encrypted_private_key: Mapped[str | None] = deferred(mapped_column(Text, nullable=True))
+    server_encrypted_private_key: Mapped[str | None] = deferred(
+        mapped_column(Text, nullable=True)
+    )
     google_last_synced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -39,6 +57,7 @@ class User(Base):
             "id": str(self.id),
             "email": self.email,
             "full_name": self.full_name,
+            "security_mode": self.security_mode.value,
             "google_connected": bool(self.google_token),
             "slack_connected": bool(self.slack_token),
             "google_last_synced_at": self.google_last_synced_at.isoformat()
@@ -47,5 +66,6 @@ class User(Base):
             "slack_last_synced_at": self.slack_last_synced_at.isoformat()
             if self.slack_last_synced_at
             else None,
+            "public_key": self.public_key,
             "created_at": self.created_at.isoformat(),
         }

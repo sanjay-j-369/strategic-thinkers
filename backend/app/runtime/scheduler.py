@@ -7,6 +7,7 @@ from fastapi import FastAPI
 
 from app.config import settings
 from app.runtime.task_names import TaskNames
+from app.services.worker_directory import list_catalog_items
 
 _scheduler_app: FastAPI | None = None
 
@@ -26,16 +27,20 @@ def create_scheduler(app: FastAPI) -> AsyncIOScheduler:
 
 
 def _register_jobs(app: FastAPI, scheduler: AsyncIOScheduler) -> None:
-    for lane in ("gtm", "cto", "dev"):
+    for legacy_job_id in ("ai-worker-gtm", "ai-worker-cto", "ai-worker-dev"):
+        if scheduler.get_job(legacy_job_id):
+            scheduler.remove_job(legacy_job_id)
+
+    for worker in list_catalog_items():
         scheduler.add_job(
             enqueue_named_task,
             trigger=CronTrigger(hour=f"*/{settings.AI_WORKER_SWEEP_INTERVAL_HOURS}"),
             kwargs={
                 "task_name": TaskNames.AI_WORKER_SWEEP,
-                "payload": {"lane": lane},
+                "payload": {"worker_key": worker.key},
                 "priority": 2,
             },
-            id=f"ai-worker-{lane}",
+            id=f"ai-worker-{worker.key}",
             replace_existing=True,
         )
 

@@ -102,3 +102,13 @@ async def reset_demo(request: Request):
     )
 
     return {"status": "reset-and-queued", **queued}
+
+@router.get("/users")
+async def list_demo_users():
+    from sqlmodel import select
+    from app.db import AsyncSessionLocal
+    from app.models import User
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(User))
+        users = result.scalars().all()
+        return {"users": [{"id": u.id, "email": u.email, "full_name": u.full_name} for u in users]}

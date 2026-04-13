@@ -70,6 +70,7 @@ def generate_findings(state: MentorState) -> MentorState:
             {
                 "type": "HIRING_TRIGGER",
                 "severity": "warning",
+                "importance_score": 72,
                 "title": "Customer Success hiring trigger",
                 "body": (
                     f"MRR is ${float(profile.get('mrr_usd') or 0):,.0f} and support load is "
@@ -86,6 +87,7 @@ def generate_findings(state: MentorState) -> MentorState:
             {
                 "type": "RUNWAY_ALERT",
                 "severity": "critical",
+                "importance_score": 96,
                 "title": "Runway pressure increased",
                 "body": (
                     f"Current runway is {current_runway:.1f} months. Burn should be audited immediately and "
@@ -99,6 +101,7 @@ def generate_findings(state: MentorState) -> MentorState:
             {
                 "type": "BURNOUT_ALERT",
                 "severity": "warning",
+                "importance_score": 78,
                 "title": "Founder burnout risk detected",
                 "body": (
                     f"Late-night Slack ratio is {signals.get('late_night_ratio')} and terse-reply ratio is "
@@ -123,6 +126,7 @@ def compose_mentor_notifications(state: MentorState) -> MentorState:
             {
                 "notification_type": finding["type"],
                 "severity": finding["severity"],
+                "importance_score": finding.get("importance_score", 0),
                 "title": finding["title"],
                 "body": finding["body"],
                 "payload": {"memo": state.get("memo", ""), "signals": state.get("signals", {})},
@@ -133,6 +137,7 @@ def compose_mentor_notifications(state: MentorState) -> MentorState:
             {
                 "notification_type": "MENTOR_MEMO",
                 "severity": "info",
+                "importance_score": 20,
                 "title": "Mentor weekly check-in",
                 "body": state.get("memo", "No critical strategic alerts."),
                 "payload": {"signals": state.get("signals", {})},

@@ -78,6 +78,13 @@ export async function exportPublicKeyPem(publicKey: CryptoKey): Promise<string> 
   return `-----BEGIN PUBLIC KEY-----\n${chunks.join("\n")}\n-----END PUBLIC KEY-----`;
 }
 
+export async function exportPrivateKeyPem(privateKey: CryptoKey): Promise<string> {
+  const pkcs8 = await window.crypto.subtle.exportKey("pkcs8", privateKey);
+  const b64 = bytesToBase64(new Uint8Array(pkcs8));
+  const chunks = b64.match(/.{1,64}/g) || [];
+  return `-----BEGIN PRIVATE KEY-----\n${chunks.join("\n")}\n-----END PRIVATE KEY-----`;
+}
+
 interface WrappedPrivateKeyPayload {
   iv: string;
   ciphertext: string;

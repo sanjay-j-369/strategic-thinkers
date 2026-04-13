@@ -8,19 +8,36 @@ from app.agentic.llm import complete_text
 
 class WorkerState(TypedDict):
     user_id: str
+    user_email: str
+    security_mode: str
+    google_connected: bool
+    worker_key: str
+    worker_name: str
     lane: str
     tags: list[str]
+    config: dict
     context_items: list[dict]
     blockers: list[str]
     blocker_summary: str
+    draft_payload: dict | None
     notification: dict | None
 
 
 def load_lane_context(state: WorkerState) -> WorkerState:
+    monitor_targets = state.get("config", {}).get("monitor_targets", "")
+    custom_instructions = state.get("config", {}).get("custom_instructions", "")
     items = query_memory_by_tags(
         state["user_id"],
         tags=state["tags"],
-        query_text=f"{state['lane']} blocker scan",
+        query_text=" ".join(
+            part
+            for part in (
+                f"{state['worker_name']} blocker scan",
+                monitor_targets,
+                custom_instructions,
+            )
+            if part
+        ),
         since_hours=24,
     )
     return {**state, "context_items": items}
@@ -28,6 +45,7 @@ def load_lane_context(state: WorkerState) -> WorkerState:
 
 def identify_blockers(state: WorkerState) -> WorkerState:
     snippets = [item.get("text", "")[:300] for item in state.get("context_items", [])]
+    instructions = state.get("config", {}).get("custom_instructions", "")
     blocker_lines = []
     for snippet in snippets:
         lowered = snippet.lower()
@@ -38,7 +56,8 @@ def identify_blockers(state: WorkerState) -> WorkerState:
     if blocker_lines:
         fallback = "\n".join(f"- {line}" for line in blocker_lines[:3])
     summary = complete_text(
-        "Summarize the operational blockers from these snippets in 2 bullet points:\n\n"
+        "Summarize the operational blockers from these snippets in 2 bullet points.\n"
+        f"Worker instructions: {instructions or 'None provided.'}\n\n"
         + "\n---\n".join(snippets[:8]),
         fallback=fallback,
         max_tokens=220,
@@ -56,17 +75,42 @@ def compose_operator_alert(state: WorkerState) -> WorkerState:
     if not state.get("blockers") and "no strong blocker" in state.get("blocker_summary", "").lower():
         return {**state, "notification": None}
 
-    title = f"{state['lane'].upper()} Worker surfaced blockers"
+    security_mode = state.get("security_mode", "magic")
+    digest_enabled = bool(state.get("config", {}).get("daily_digest_emails", True))
+    title = f"{state['worker_name']} surfaced GTM actions"
     body = state.get("blocker_summary", "").strip()
+    if security_mode == "magic":
+        body = (
+            f"{body}\n\nMagic Mode active. Founder OS can draft contextual follow-ups "
+            f"and {'send' if digest_enabled else 'skip'} daily GTM digests."
+        )
+        notification_type = "GTM_DAILY_DIGEST"
+    else:
+        body = (
+            f"{body}\n\nVault Mode active. Founder OS will save a UUID-based skeleton draft "
+            "until the founder opens the app and resolves private context."
+        )
+        notification_type = "GTM_SKELETON_DRAFT"
     notification = {
-        "notification_type": "OPERATOR_ALERT",
+        "notification_type": notification_type,
         "severity": "warning",
         "title": title,
         "body": body,
         "payload": {
+            "worker_key": state["worker_key"],
+            "worker_name": state["worker_name"],
+            "security_mode": security_mode,
             "lane": state["lane"],
             "tags": state["tags"],
+            "monitor_targets": state.get("config", {}).get("monitor_targets"),
+            "daily_digest_emails": digest_enabled,
             "context_count": len(state.get("context_items", [])),
         },
     }
-    return {**state, "notification": notification}
+    draft_payload = {
+        "channel": "email",
+        "prompt": f"{state['worker_name']} GTM follow-up",
+        "draft_text": body,
+        "context_payload": notification["payload"],
+    }
+    return {**state, "notification": notification, "draft_payload": draft_payload}

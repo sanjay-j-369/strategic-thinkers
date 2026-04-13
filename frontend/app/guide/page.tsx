@@ -84,7 +84,7 @@ export default function GuidePage() {
 
   if (!ready) {
     return (
-      <Card className="border-2 border-border bg-card shadow-pixel">
+      <Card className="border border-border bg-card ">
         <CardContent className="py-20 text-center text-sm text-foreground/60">Loading mentor workspace...</CardContent>
       </Card>
     );
@@ -93,7 +93,7 @@ export default function GuidePage() {
   return (
     <div className="space-y-6">
       <section className="grid gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
-        <Card className="border-2 border-border bg-card shadow-pixel bg-card text-card-foreground">
+        <Card className="border border-border bg-card  bg-card text-card-foreground">
           <CardHeader>
             <Badge>Mentor</Badge>
             <CardTitle className="font-sans text-4xl font-black uppercase tracking-[-0.05em]">
@@ -108,7 +108,7 @@ export default function GuidePage() {
               <button
                 key={starter}
                 type="button"
-                className="shadow-pixel w-full border-2 border-border bg-primary px-4 py-4 text-left text-sm font-black uppercase tracking-[0.06em] text-primary-foreground"
+                className=" w-full border border-border bg-primary px-4 py-4 text-left text-sm font-black uppercase tracking-[0.06em] text-primary-foreground"
                 onClick={() => void submit(starter)}
                 disabled={submitting}
               >
@@ -118,7 +118,7 @@ export default function GuidePage() {
           </CardContent>
         </Card>
 
-        <Card className="border-2 border-border bg-card shadow-pixel bg-card">
+        <Card className="border border-border bg-card  bg-card">
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="space-y-2">
@@ -128,7 +128,7 @@ export default function GuidePage() {
                   Your question is pushed into the backend queue, reasoned on in the background, and delivered back into the notification feed.
                 </CardDescription>
               </div>
-              <div className="border-2 border-border px-4 py-4 shadow-pixel bg-background">
+              <div className="border border-border px-4 py-4  bg-background">
                 <p className="mono-label text-foreground/50">Recent runs</p>
                 <p className="mt-2 text-3xl font-black text-foreground">{runs.length}</p>
               </div>
@@ -152,7 +152,7 @@ export default function GuidePage() {
               </div>
             </div>
             {status ? (
-              <div className="border-2 border-border px-4 py-4 shadow-pixel bg-background">
+              <div className="border border-border px-4 py-4  bg-background">
                 <p className="text-sm leading-7 text-foreground/75">{status}</p>
               </div>
             ) : null}
@@ -167,7 +167,7 @@ export default function GuidePage() {
             <h2 className="mt-2 text-4xl font-black uppercase tracking-[-0.06em] text-foreground">Strategic feed</h2>
           </div>
           {mentorSignals.length === 0 ? (
-            <Card className="border-2 border-border bg-card shadow-pixel">
+            <Card className="border border-border bg-card ">
               <CardContent className="space-y-4 py-16 text-center">
                 <Sparkles className="mx-auto h-10 w-10 text-foreground" />
                 <h3 className="text-2xl font-black uppercase text-foreground">Nothing returned yet</h3>
@@ -190,7 +190,7 @@ export default function GuidePage() {
           )}
         </div>
 
-        <Card className="border-2 border-border bg-card shadow-pixel bg-card">
+        <Card className="border border-border bg-card  bg-card">
           <CardHeader>
             <Badge variant="outline">Run log</Badge>
             <CardTitle className="font-sans text-2xl font-black uppercase tracking-tight">
@@ -202,7 +202,7 @@ export default function GuidePage() {
               <p className="text-sm leading-7 text-foreground/60">No mentor runs logged yet.</p>
             ) : (
               runs.map((run) => (
-                <div key={run.id} className="border-2 border-border px-4 py-4 shadow-pixel bg-background">
+                <div key={run.id} className="border border-border px-4 py-4  bg-background">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-black uppercase tracking-[0.08em] text-foreground">{run.agent_name}</p>
                     <Badge variant="outline">{run.status}</Badge>
@@ -211,7 +211,7 @@ export default function GuidePage() {
                     {new Date(run.started_at).toLocaleString()}
                   </p>
                   {run.error_text ? (
-                    <p className="mt-3 inline-flex items-center gap-2 border-2 border-border bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
+                    <p className="mt-3 inline-flex items-center gap-2 border border-border bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
                       <AlertTriangle className="h-4 w-4" />
                       {run.error_text}
                     </p>

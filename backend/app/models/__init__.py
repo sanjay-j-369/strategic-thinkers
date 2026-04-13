@@ -8,6 +8,7 @@ from .startup_profile import StartupProfile
 from .summary import Summary
 from .task_queue import TaskQueue
 from .user import User
+from .worker_agent import WorkerAgent, WorkerStatus
 
 __all__ = [
     "AgentNotification",
@@ -20,4 +21,6 @@ __all__ = [
     "Summary",
     "TaskQueue",
     "User",
+    "WorkerAgent",
+    "WorkerStatus",
 ]

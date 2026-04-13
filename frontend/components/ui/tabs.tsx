@@ -44,7 +44,7 @@ function TabsList({
   return (
     <div
       className={cn(
-        "shadow-pixel inline-flex border-2 border-border bg-card p-1",
+        " inline-flex border border-border bg-card p-1",
         className
       )}
       {...props}
@@ -66,9 +66,9 @@ function TabsTrigger({
       type="button"
       data-state={active ? "active" : "inactive"}
       className={cn(
-        "inline-flex min-w-[120px] items-center justify-center gap-2 border-2 border-border px-4 py-2 text-xs font-black uppercase tracking-[0.14em] transition-all",
+        "inline-flex min-w-[120px] items-center justify-center gap-2 border border-border px-4 py-2 text-xs font-black uppercase tracking-[0.14em] transition-all",
         active
-          ? "shadow-pixel bg-primary text-primary-foreground"
+          ? " bg-primary text-primary-foreground"
           : "bg-card text-card-foreground hover:bg-primary/20",
         className
       )}

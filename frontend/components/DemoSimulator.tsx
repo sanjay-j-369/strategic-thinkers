@@ -222,7 +222,7 @@ export function DemoSimulator() {
             </div>
 
             {scenarioName ? (
-              <div className="rounded-none border-2 border-border bg-secondary p-3 text-sm text-muted-foreground shadow-pixel-sm">
+              <div className="rounded-none border border-border bg-secondary p-3 text-sm text-muted-foreground -sm">
                 {scenarios
                   .filter((scenario) => scenario.name === scenarioName)
                   .map((scenario) => (
@@ -244,12 +244,12 @@ export function DemoSimulator() {
             </Button>
 
             {status ? (
-              <p className="rounded-none border-2 border-border bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground shadow-pixel-sm">
+              <p className="rounded-none border border-border bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground -sm">
                 {status}
               </p>
             ) : null}
             {error ? (
-              <p className="rounded-none border-2 border-border bg-destructive px-3 py-2 text-sm font-semibold text-destructive-foreground shadow-pixel-sm">
+              <p className="rounded-none border border-border bg-destructive px-3 py-2 text-sm font-semibold text-destructive-foreground -sm">
                 {error}
               </p>
             ) : null}
@@ -276,14 +276,14 @@ export function DemoSimulator() {
           <CardContent className="h-[540px] overflow-y-auto p-0">
             <div className="flex h-full flex-col gap-2 p-4 font-mono text-xs leading-6">
               {visibleLogs.length === 0 ? (
-                <div className="rounded-none border-2 border-dashed border-background/40 bg-foreground p-4 text-background/60">
+                <div className="rounded-none border border-dashed border-background/40 bg-foreground p-4 text-background/60">
                   Waiting for live agent logs.
                 </div>
               ) : null}
               {visibleLogs.map((log) => (
                 <div
                   key={log.log_id}
-                  className="rounded-none border-2 border-background bg-secondary px-3 py-2 text-foreground shadow-pixel-sm"
+                  className="rounded-none border border-background bg-secondary px-3 py-2 text-foreground -sm"
                 >
                   <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-foreground/65">
                     <span>{new Date(log.generated_at).toLocaleTimeString()}</span>

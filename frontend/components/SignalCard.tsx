@@ -61,11 +61,11 @@ export function SignalCard({ signal }: { signal: SignalItem }) {
   const timestamp = signal.created_at || signal.generated_at;
 
   return (
-    <Card className="border-2 border-border bg-card shadow-pixel overflow-hidden">
+    <Card className="border border-border bg-card  overflow-hidden">
       <CardHeader className="border-b-2 border-border pb-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="flex items-start gap-4">
-            <div className={`mt-1 flex h-12 w-12 items-center justify-center border-2 border-border ${signalTone(signal.severity)}`}>
+            <div className={`mt-1 flex h-12 w-12 items-center justify-center border border-border ${signalTone(signal.severity)}`}>
               <Icon className="h-5 w-5 text-foreground" />
             </div>
             <div className="space-y-2">
@@ -94,7 +94,7 @@ export function SignalCard({ signal }: { signal: SignalItem }) {
               href={payload.source_url}
               target="_blank"
               rel="noreferrer"
-              className="shadow-pixel inline-flex items-center gap-2 border-2 border-border bg-card px-3 py-2 text-xs font-black uppercase tracking-[0.18em]"
+              className=" inline-flex items-center gap-2 border border-border bg-card px-3 py-2 text-xs font-black uppercase tracking-[0.18em]"
             >
               Source
               <ArrowUpRight className="h-3.5 w-3.5" />
@@ -110,7 +110,7 @@ export function SignalCard({ signal }: { signal: SignalItem }) {
               .filter(([key, value]) => key !== "type" && key !== "summary" && key !== "output" && value != null && typeof value !== "object")
               .slice(0, 6)
               .map(([key, value]) => (
-                <div key={key} className="shadow-pixel border-2 border-border bg-card px-3 py-3">
+                <div key={key} className=" border border-border bg-card px-3 py-3">
                   <p className="mono-label text-foreground/50">{key.replace(/_/g, " ")}</p>
                   <p className="mt-1 text-sm font-medium text-foreground">{stringifyPayloadValue(value)}</p>
                 </div>

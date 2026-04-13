@@ -20,6 +20,22 @@ def encrypt_with_public_key(public_key_pem: str, plaintext: str) -> str:
     return base64.b64encode(ciphertext).decode("utf-8")
 
 
+def decrypt_with_private_key(private_key_pem: str, ciphertext_b64: str) -> str:
+    private_key = serialization.load_pem_private_key(
+        private_key_pem.encode("utf-8"),
+        password=None,
+    )
+    plaintext = private_key.decrypt(
+        base64.b64decode(ciphertext_b64),
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None,
+        ),
+    )
+    return plaintext.decode("utf-8")
+
+
 def encrypt_large_with_public_key(public_key_pem: str, plaintext: str) -> str:
     """Encrypt arbitrarily large content using AES-GCM + RSA-OAEP key wrapping."""
     public_key = serialization.load_pem_public_key(public_key_pem.encode("utf-8"))

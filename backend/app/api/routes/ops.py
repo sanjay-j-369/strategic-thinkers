@@ -159,6 +159,7 @@ async def list_drafts(
                 "status": item.status,
                 "prompt": item.prompt,
                 "draft_text": item.draft_text,
+                "context_payload": item.context_payload,
                 "created_at": item.created_at.isoformat(),
             }
             for item in items

@@ -12,17 +12,18 @@ import {
 import { apiFetch } from "@/lib/api";
 
 const STORAGE_KEY = "founder-os-session";
-const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
 export interface AuthUser {
   id: string;
   email: string;
   full_name: string | null;
+  security_mode: "vault" | "magic";
   created_at: string;
   google_connected: boolean;
   slack_connected: boolean;
   google_last_synced_at: string | null;
   slack_last_synced_at: string | null;
+  public_key?: string | null;
 }
 
 interface StoredSession {
@@ -86,36 +87,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshSession = useCallback(async () => {
-    async function attemptDemoSession() {
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        try {
-          const data = await apiFetch<{ token: string; user: AuthUser }>(
-            "/api/auth/demo-session",
-            { method: "POST" }
-          );
-          setSession(data.token, data.user);
-          return true;
-        } catch {
-          if (attempt === 0) {
-            await new Promise((resolve) => setTimeout(resolve, 1200));
-          }
-        }
-      }
-      return false;
-    }
-
-    // In demo mode, always pin the browser to the demo identity so
-    // presenter-triggered events land on the same websocket user feed.
-    if (DEMO_MODE) {
-      setLoading(true);
-      const ok = await attemptDemoSession();
-      if (!ok) {
-        signOut();
-      }
-      setLoading(false);
-      return;
-    }
-
     const stored = readStoredSession();
     if (!stored?.token) {
       setLoading(false);

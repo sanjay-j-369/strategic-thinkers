@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import secrets
 import uuid
@@ -20,7 +21,7 @@ from app.config import settings
 from app.demo.persona import enqueue_demo_history, ensure_demo_persona, get_demo_snapshot
 from app.ingestion.gmail import GmailWorker
 from app.ingestion.slack import SlackWorker
-from app.models.user import User
+from app.models.user import SecurityMode, User
 from app.pipeline.encryption import decrypt, encrypt
 from app.security import (
     create_access_token,
@@ -35,6 +36,7 @@ from app.security import (
 load_dotenv(Path(__file__).resolve().parents[4] / ".env")
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+logger = logging.getLogger(__name__)
 
 _flow_store: dict[str, dict] = {}
 _slack_state_store: dict[str, dict] = {}
@@ -44,6 +46,7 @@ GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/calendar.readonly",
+    "https://www.googleapis.com/auth/gmail.compose",
 ]
 SLACK_SCOPES = [
     "channels:history",
@@ -54,7 +57,7 @@ SLACK_SCOPES = [
     "mpim:history",
 ]
 
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+FRONTEND_URL = os.getenv("FRONTEND_URL", settings.APP_BASE_URL)
 GOOGLE_REDIRECT_URI = os.getenv(
     "GOOGLE_REDIRECT_URI", "http://localhost:8001/api/auth/google/callback"
 )
@@ -66,9 +69,11 @@ class SignUpBody(BaseModel):
     email: str
     password: str
     full_name: str | None = None
+    security_mode: str = "magic"
     salt: str | None = None
     public_key: str | None = None
     encrypted_private_key: str | None = None
+    raw_private_key: str | None = None
 
 
 class SignInBody(BaseModel):
@@ -134,24 +139,53 @@ def _validate_password(password: str) -> None:
         )
 
 
+def _parse_security_mode(value: str) -> SecurityMode:
+    normalized = (value or "").strip().lower() or "magic"
+    try:
+        return SecurityMode(normalized)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="security_mode must be 'vault' or 'magic'",
+        ) from exc
+
+
 def _validate_key_material(
     *,
+    security_mode: SecurityMode,
     salt: str | None,
     public_key: str | None,
     encrypted_private_key: str | None,
+    raw_private_key: str | None,
 ) -> None:
-    values = [salt, public_key, encrypted_private_key]
-    provided = [value for value in values if value]
-    if provided and len(provided) != len(values):
+    if security_mode == SecurityMode.VAULT:
+        if not (salt and public_key and encrypted_private_key):
+            raise HTTPException(
+                status_code=400,
+                detail="Vault Mode requires salt, public_key, and encrypted_private_key",
+            )
+        if raw_private_key:
+            raise HTTPException(
+                status_code=400,
+                detail="Vault Mode must not send raw_private_key",
+            )
+        return
+
+    if not (public_key and raw_private_key):
         raise HTTPException(
             status_code=400,
-            detail="salt, public_key, and encrypted_private_key must be provided together",
+            detail="Magic Mode requires public_key and raw_private_key",
+        )
+    if salt or encrypted_private_key:
+        raise HTTPException(
+            status_code=400,
+            detail="Magic Mode should not send salt or encrypted_private_key",
         )
 
 
 def _safe_encrypted_private_key(user: User) -> str | None:
     try:
-        return user.encrypted_private_key
+        return user.__dict__.get("encrypted_private_key")
     except Exception:
         # Legacy schema without E2EE columns.
         return None
@@ -169,14 +203,17 @@ async def sign_up(body: SignUpBody, request: Request):
     email = _normalize_email(body.email)
     password = body.password
     full_name = (body.full_name or "").strip() or None
+    security_mode = _parse_security_mode(body.security_mode)
 
     if not email:
         raise HTTPException(status_code=400, detail="Email is required")
     _validate_password(password)
     _validate_key_material(
+        security_mode=security_mode,
         salt=body.salt,
         public_key=body.public_key,
         encrypted_private_key=body.encrypted_private_key,
+        raw_private_key=body.raw_private_key,
     )
 
     async_session = request.app.state.async_session
@@ -200,7 +237,7 @@ async def sign_up(body: SignUpBody, request: Request):
             # Legacy or malformed hash format: allow password re-initialization.
 
         if user is None:
-            user = User(email=email, full_name=full_name)
+            user = User(email=email, full_name=full_name, security_mode=security_mode)
             session.add(user)
             await session.flush()
         else:
@@ -208,10 +245,18 @@ async def sign_up(body: SignUpBody, request: Request):
                 user.full_name = full_name
 
         user.password_hash = hash_password(password)
-        if body.salt and body.public_key and body.encrypted_private_key:
+        user.security_mode = security_mode
+        user.public_key = body.public_key
+        if security_mode == SecurityMode.VAULT:
             user.salt = body.salt
-            user.public_key = body.public_key
             user.encrypted_private_key = body.encrypted_private_key
+            user.server_encrypted_private_key = None
+        else:
+            raw_private_key = body.raw_private_key or ""
+            user.salt = None
+            user.encrypted_private_key = None
+            user.server_encrypted_private_key = encrypt(str(user.id), raw_private_key)
+            raw_private_key = ""
         await session.commit()
         await session.refresh(user)
 
@@ -235,6 +280,11 @@ async def key_salt(email: str, request: Request):
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if user.security_mode == SecurityMode.MAGIC:
+        raise HTTPException(
+            status_code=409,
+            detail="Magic Mode accounts do not use password-derived key wrapping.",
+        )
     user_salt = _safe_user_salt(user)
     if not user_salt:
         raise HTTPException(
@@ -248,30 +298,47 @@ async def key_salt(email: str, request: Request):
 async def sign_in(body: SignInBody, request: Request):
     email = _normalize_email(body.email)
     password = body.password
+    logger.info("[auth.signin] attempt email=%s", email or "<empty>")
 
     if not email or not password:
+        logger.warning("[auth.signin] missing credentials email_present=%s", bool(email))
         raise HTTPException(status_code=400, detail="Email and password are required")
 
     async_session = request.app.state.async_session
-    async with async_session() as session:
-        result = await session.execute(select(User).where(User.email == email))
-        user = result.scalar_one_or_none()
+    try:
+        async with async_session() as session:
+            result = await session.execute(select(User).where(User.email == email))
+            user = result.scalar_one_or_none()
+    except Exception:
+        logger.exception("[auth.signin] database lookup failed email=%s", email)
+        raise
 
     if not user or not user.password_hash:
+        logger.warning("[auth.signin] invalid credentials missing user/hash email=%s", email)
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not is_password_hash_format(user.password_hash):
+        logger.warning("[auth.signin] malformed password hash email=%s", email)
         raise HTTPException(
             status_code=400,
             detail="This account needs a password reset. Use Sign Up with the same email to set a new password.",
         )
     if not verify_password(password, user.password_hash):
+        logger.warning("[auth.signin] password mismatch email=%s", email)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    return {
-        "token": create_access_token(user),
-        "user": user_public_dict(user),
-        "encrypted_private_key": _safe_encrypted_private_key(user),
-    }
+    security_mode = (
+        user.security_mode.value if hasattr(user.security_mode, "value") else str(user.security_mode)
+    )
+    logger.info("[auth.signin] authenticated email=%s security_mode=%s", email, security_mode)
+    try:
+        return {
+            "token": create_access_token(user),
+            "user": user_public_dict(user),
+            "encrypted_private_key": _safe_encrypted_private_key(user),
+        }
+    except Exception:
+        logger.exception("[auth.signin] response serialization failed email=%s security_mode=%s", email, security_mode)
+        raise
 
 
 @router.post("/demo-session")

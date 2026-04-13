@@ -3,11 +3,6 @@
 import { useEffect, useState } from "react";
 import {
   Activity,
-  Inbox,
-  MessageSquare,
-  RefreshCw,
-  Rocket,
-  Sparkles,
   TerminalSquare,
   X,
 } from "lucide-react";
@@ -16,6 +11,7 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/api";
 
 const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
@@ -23,14 +19,19 @@ const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 export function DemoControls({ inline = false }: { inline?: boolean }) {
   const { token, user } = useAuth();
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState<
-    "bootstrap" | "email" | "slack" | "prep" | "growth" | "reset" | "scenario" | null
-  >(null);
+  const [busy, setBusy] = useState<"scenario" | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [targetUserId, setTargetUserId] = useState("");
   const [scenarios, setScenarios] = useState<
     Array<{ name: string; event_count: number; sources: string[] }>
   >([]);
+
+  useEffect(() => {
+    if (user?.id) {
+      setTargetUserId((current) => current || user.id);
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     if (!DEMO_MODE) return;
@@ -71,36 +72,8 @@ export function DemoControls({ inline = false }: { inline?: boolean }) {
     };
   }, [token]);
 
-  async function runAction(
-    action: "bootstrap" | "email" | "slack" | "prep" | "growth" | "reset",
-    path: string,
-    message: string,
-    body?: unknown
-  ) {
-    if (!DEMO_MODE) return;
-    setBusy(action);
-    setError(null);
-    setStatus(null);
-    try {
-      const response = await apiFetch<{ queued?: number }>(path, {
-        method: "POST",
-        token,
-        json: body,
-      });
-      const queued = response.queued ?? 0;
-      setStatus(`${message}${queued ? ` (${queued} event${queued > 1 ? "s" : ""})` : ""}`);
-      if (action === "reset") {
-        window.dispatchEvent(new Event("demo:reset-feed"));
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Action failed.");
-    } finally {
-      setBusy(null);
-    }
-  }
-
   async function runScenario(name: string) {
-    if (!DEMO_MODE || !token || !user?.id) return;
+    if (!DEMO_MODE || !token || !targetUserId.trim()) return;
     setBusy("scenario");
     setError(null);
     setStatus(null);
@@ -111,13 +84,13 @@ export function DemoControls({ inline = false }: { inline?: boolean }) {
           method: "POST",
           token,
           json: {
-            user_id: user.id,
+            user_id: targetUserId.trim(),
             scenario_name: name,
           },
         }
       );
       setStatus(
-        `Scenario ${response.scenario_name || name} queued${response.queued ? ` (${response.queued} event${response.queued > 1 ? "s" : ""})` : ""}.`
+        `Scenario ${response.scenario_name || name} queued for ${targetUserId.trim()}${response.queued ? ` (${response.queued} event${response.queued > 1 ? "s" : ""})` : ""}.`
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Scenario trigger failed.");
@@ -127,19 +100,18 @@ export function DemoControls({ inline = false }: { inline?: boolean }) {
   }
 
   if (!DEMO_MODE) return null;
-
   return (
     <>
       {!inline && !open ? (
         <Button
           type="button"
-          variant="secondary"
+          variant="outline"
           size="sm"
-          className="fixed bottom-5 left-5 z-[60]"
+          className="fixed bottom-5 right-5 z-[60] rounded-none border-border bg-background"
           onClick={() => setOpen(true)}
         >
           <TerminalSquare className="h-4 w-4" />
-          Demo
+          Demo Tools
         </Button>
       ) : null}
 
@@ -148,21 +120,29 @@ export function DemoControls({ inline = false }: { inline?: boolean }) {
           className={
             inline
               ? "w-full"
-              : "fixed inset-y-0 right-0 z-[70] w-full max-w-sm border-l border-border bg-card p-4 shadow-2xl backdrop-blur-xl"
+              : "fixed inset-y-0 right-0 z-[70] w-full max-w-[420px] border-l border-border bg-background"
           }
         >
-          <Card className={inline ? "border-border bg-card" : "h-full border-border bg-zinc-950/90"}>
-            <CardHeader className="pb-3">
+          <Card className={inline ? "border-border bg-card rounded-none" : "flex h-full min-h-0 flex-col border-0 bg-background rounded-none"}>
+            <CardHeader className="gap-4 border-b border-border pb-6">
               <div className="flex items-center justify-between gap-3">
-                <div className="space-y-2">
-                  <Badge className="w-fit">{inline ? "Demo Actions" : "Presenter Overlay"}</Badge>
-                  <CardTitle className="text-lg">Demo Command Center</CardTitle>
+                <div className="space-y-3">
+                  <Badge variant="outline" className="w-fit rounded-none border-border bg-background text-foreground">
+                    {inline ? "Demo Actions" : "Presenter Overlay"}
+                  </Badge>
+                  <CardTitle className="font-sans text-3xl font-black uppercase tracking-[-0.06em] text-foreground">
+                    Demo Command Center
+                  </CardTitle>
+                  <p className="max-w-sm text-sm leading-7 text-foreground/60">
+                    Demo mode should only dispatch seeded scenarios to a chosen workspace. The rest of the product should behave like the normal app.
+                  </p>
                 </div>
                 {!inline ? (
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
+                    className="rounded-none border border-border"
                     onClick={() => setOpen(false)}
                   >
                     <X className="h-4 w-4" />
@@ -170,132 +150,65 @@ export function DemoControls({ inline = false }: { inline?: boolean }) {
                 ) : null}
               </div>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="flex-1 min-h-0 overflow-y-auto p-6">
+              <div className="grid gap-6">
+                <div className="grid gap-3 border border-border px-4 py-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-foreground/50">
+                    Target Workspace
+                  </p>
+                  <Input
+                    value={targetUserId}
+                    onChange={(event) => setTargetUserId(event.target.value)}
+                    placeholder="Paste the user id to receive the scenario"
+                    className="rounded-none border-neutral-300 bg-white text-black"
+                  />
+                  <p className="text-xs leading-6 text-foreground/60">
+                    {user?.id
+                      ? `Current session user: ${user.id}`
+                      : "Sign in first, or paste a valid user id manually."}
+                  </p>
+                </div>
+
               {scenarios.length > 0 ? (
-                <div className="space-y-2 rounded-2xl border border-border/70 bg-background/70 p-3">
+                <div className="grid gap-3 border border-border px-4 py-4">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="mono-label">Scenario Run</p>
-                    <Badge variant="outline">{scenarios.length}</Badge>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-foreground/50">
+                      Scenario Run
+                    </p>
+                    <Badge variant="outline" className="rounded-none">{scenarios.length}</Badge>
                   </div>
                   <div className="grid gap-2">
                     {scenarios.map((scenario) => (
                       <Button
                         key={scenario.name}
-                        className="w-full justify-between"
-                        disabled={busy !== null}
+                        className="h-auto w-full justify-between rounded-none px-4 py-4"
+                        disabled={busy !== null || !targetUserId.trim()}
                         variant="outline"
                         onClick={() => void runScenario(scenario.name)}
                       >
-                        <span className="flex items-center gap-2">
-                          <Activity className="h-4 w-4" />
-                          {scenario.name.replace(/_/g, " ")}
+                        <span className="grid text-left">
+                          <span className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em]">
+                            <Activity className="h-4 w-4" />
+                            {scenario.name.replace(/_/g, " ")}
+                          </span>
+                          <span className="mt-1 text-[11px] font-medium normal-case tracking-normal opacity-70">
+                            Sources: {scenario.sources.join(", ")}
+                          </span>
                         </span>
-                        <span className="text-[10px] uppercase tracking-[0.16em] opacity-70">
-                          {scenario.event_count} evt
-                        </span>
+                        <span className="text-[10px] uppercase tracking-[0.16em] opacity-70">{scenario.event_count} evt</span>
                       </Button>
                     ))}
                   </div>
                 </div>
               ) : null}
 
-              <Button
-                className="w-full justify-start"
-                disabled={busy !== null}
-                variant="secondary"
-                onClick={() =>
-                  runAction(
-                    "bootstrap",
-                    "/api/demo/bootstrap",
-                    "Full demo timeline queued.",
-                    { reset: true }
-                  )
-                }
-              >
-                <RefreshCw className="h-4 w-4" />
-                Queue Full Timeline
-              </Button>
-
-              <Button
-                className="w-full justify-start"
-                disabled={busy !== null}
-                onClick={() =>
-                  runAction("email", "/api/demo/trigger-email", "Demo email queued.")
-                }
-              >
-                <Inbox className="h-4 w-4" />
-                Trigger Demo Email
-              </Button>
-
-              <Button
-                className="w-full justify-start"
-                disabled={busy !== null}
-                variant="secondary"
-                onClick={() =>
-                  runAction("slack", "/api/demo/trigger-slack", "Demo Slack message queued.")
-                }
-              >
-                <MessageSquare className="h-4 w-4" />
-                Trigger Demo Slack
-              </Button>
-
-              <Button
-                className="w-full justify-start"
-                disabled={busy !== null}
-                onClick={() =>
-                  runAction(
-                    "prep",
-                    "/api/demo/trigger-prep",
-                    "Meeting prep task queued."
-                  )
-                }
-              >
-                <Rocket className="h-4 w-4" />
-                Trigger Meeting Prep
-              </Button>
-
-              <Button
-                className="w-full justify-start"
-                variant="default"
-                disabled={busy !== null}
-                onClick={() =>
-                  runAction(
-                    "growth",
-                    "/api/demo/trigger-growth",
-                    "Growth milestone evaluator queued."
-                  )
-                }
-              >
-                <Sparkles className="h-4 w-4" />
-                Trigger Growth Milestone
-              </Button>
-
-              <Button
-                className="w-full justify-start"
-                variant="outline"
-                disabled={busy !== null}
-                onClick={() =>
-                  runAction(
-                    "reset",
-                    "/api/demo/reset",
-                    "Demo reset complete. Re-seeding pipeline."
-                  )
-                }
-              >
-                <RefreshCw className="h-4 w-4" />
-                Reset Demo
-              </Button>
-
               {status ? (
-                <p className="rounded-xl border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
-                  {status}
-                </p>
+                <div className="border border-border bg-background px-4 py-3 text-sm text-foreground/70">{status}</div>
               ) : null}
               {error ? (
-                <p className="rounded-xl border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
-                  {error}
-                </p>
+                <div className="border border-border bg-primary px-4 py-3 text-sm text-primary-foreground">{error}</div>
               ) : null}
+              </div>
             </CardContent>
           </Card>
         </div>
