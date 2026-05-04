@@ -25,13 +25,61 @@ WORKER_CATALOG: tuple[WorkerCatalogItem, ...] = (
     WorkerCatalogItem(
         key="gtm-agent",
         name="GTM Agent",
-        description="Monitors sales and customer signals and prepares founder-reviewed follow-ups inside the encrypted workspace.",
+        description="Monitors sales and customer signals. Prepares founder-reviewed follow-ups for revenue-moving conversations, churn risk, and investor asks.",
         lane="gtm",
         tags=("customer", "support", "gtm", "slack", "email", "revenue"),
         default_config={
             "monitor_targets": "#sales,#customers,investors",
             "auto_draft_replies": True,
             "custom_instructions": "Prioritize revenue-moving follow-ups, churn risk, investor asks, and stalled pipeline conversations.",
+        },
+    ),
+    WorkerCatalogItem(
+        key="hiring-agent",
+        name="Hiring Agent",
+        description="Tracks recruiting pipelines and candidate communications. Prepares interview briefs and follow-up drafts for hiring managers.",
+        lane="hiring",
+        tags=("recruiting", "hr", "hiring", "candidates", "interviews"),
+        default_config={
+            "monitor_targets": "#hiring,#recruiting,#candidates",
+            "auto_draft_replies": False,
+            "custom_instructions": "Focus on candidate experience, interview scheduling, and offer follow-ups. Flag delayed hiring pipelines.",
+        },
+    ),
+    WorkerCatalogItem(
+        key="finance-agent",
+        name="Finance Agent",
+        description="Monitors burn rate, runway signals, and financial communications. Flags concerning patterns and prepares financial summaries.",
+        lane="finance",
+        tags=("finance", "burn-rate", "runway", "budget", "metrics"),
+        default_config={
+            "monitor_targets": "#finance,#budget,invoices",
+            "auto_draft_replies": False,
+            "custom_instructions": "Track burn rate changes, invoice delays, and investor updates. Alert on runway concerns.",
+        },
+    ),
+    WorkerCatalogItem(
+        key="product-agent",
+        name="Product Agent",
+        description="Surfaces user feedback, feature requests, and product insights. Prepares synthesis of user sentiment for roadmap planning.",
+        lane="product",
+        tags=("product", "feedback", "users", "features", "roadmap"),
+        default_config={
+            "monitor_targets": "#product,#feedback,#feature-requests",
+            "auto_draft_replies": False,
+            "custom_instructions": "Synthesize user feedback themes, flag urgent feature requests, and track competitive signals.",
+        },
+    ),
+    WorkerCatalogItem(
+        key="compliance-agent",
+        name="Compliance Agent",
+        description="Monitors legal and compliance communications. Tracks contract renewals, NDAs, and regulatory deadlines.",
+        lane="compliance",
+        tags=("legal", "compliance", "contracts", "nda", "regulatory"),
+        default_config={
+            "monitor_targets": "#legal,#compliance,contracts",
+            "auto_draft_replies": False,
+            "custom_instructions": "Track contract deadlines, NDA expirations, and compliance requirements. Flag items needing legal review.",
         },
     ),
 )

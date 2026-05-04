@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: founders_helper
     ports:
-      - "5433:5432"
+      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -20,7 +20,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -54,47 +54,6 @@ services:
       - ./backend:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-  celery-worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/founders_helper
-      REDIS_URL: redis://redis:6379/0
-      INGESTION_MODE: ${INGESTION_MODE:-simulate}
-      DEMO_MODE: ${DEMO_MODE:-false}
-      DEMO_USER_ID: ${DEMO_USER_ID:-550e8400-e29b-41d4-a716-446655440000}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./backend:/app
-    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
-
-  celery-beat:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/founders_helper
-      REDIS_URL: redis://redis:6379/0
-      INGESTION_MODE: ${INGESTION_MODE:-simulate}
-      DEMO_MODE: ${DEMO_MODE:-false}
-      DEMO_USER_ID: ${DEMO_USER_ID:-550e8400-e29b-41d4-a716-446655440000}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./backend:/app
-    command: celery -A app.workers.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
 
   frontend:
     build:

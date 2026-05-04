@@ -2,8 +2,22 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
-import { Activity, AlarmClock, ArrowRight, Bell, BriefcaseBusiness, Inbox, Layers3, Lock, Sparkles, Waves } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Activity,
+  AlarmClock,
+  ArrowRight,
+  Bell,
+  BriefcaseBusiness,
+  ChevronDown,
+  ChevronUp,
+  Inbox,
+  Layers3,
+  Lock,
+  Server,
+  Sparkles,
+  Waves,
+} from "lucide-react";
 
 import { SignalCard, type SignalItem } from "@/components/SignalCard";
 import { DraftReviewer } from "@/components/DraftReviewer";
@@ -129,6 +143,7 @@ export default function FeedPage() {
   const [piiMap, setPiiMap] = useState<Record<string, string>>({});
   const [logs, setLogs] = useState<AdminLogEvent[]>([]);
   const [socketState, setSocketState] = useState<"connecting" | "open" | "closed">("closed");
+  const [systemTrayOpen, setSystemTrayOpen] = useState(false);
   const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
   const logsViewportRef = useRef<HTMLDivElement | null>(null);
 
@@ -320,555 +335,336 @@ export default function FeedPage() {
   );
   const dashboardMetrics = opsStatus
     ? [
-        { label: "Tasks in Progress", value: opsStatus.queue.counts.pending, accent: "bg-primary text-primary-foreground" },
-        { label: "Running now", value: opsStatus.queue.counts.running, accent: "bg-background text-foreground" },
-        { label: "Active workers", value: opsStatus.workers.active_runs, accent: "bg-background text-foreground" },
-        { label: "Live Sync Status", value: opsStatus.websocket.user_connections, accent: "bg-primary text-primary-foreground" },
+        { label: "Tasks in Progress", value: opsStatus.queue.counts.pending, accent: "bg-primary text-on-primary" },
+        { label: "Running now", value: opsStatus.queue.counts.running, accent: "bg-surface-high text-on-surface" },
+        { label: "Active workers", value: opsStatus.workers.active_runs, accent: "bg-surface-high text-on-surface" },
+        { label: "Live Sync Status", value: opsStatus.websocket.user_connections, accent: "bg-primary text-on-primary" },
       ]
     : [];
   const hiredWorkers = workers;
   const connectedSourceCount = Number(Boolean(user?.google_connected)) + Number(Boolean(user?.slack_connected));
 
   return (
-    <div className="space-y-8">
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_420px]">
-        <Card className="bg-surface-high">
-          <CardHeader className="gap-6 pb-6">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge>Active AI Organization</Badge>
-              <Badge variant="outline">Workers / Assistant / Mentor</Badge>
-              {user?.security_mode ? (
-                <span className="inline-flex items-center gap-2 rounded-full surface-high px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-on-surface">
-                  <Lock className="h-3.5 w-3.5" />
-                  Vault Mode Active
-                </span>
-              ) : null}
-              <span className="inline-flex items-center gap-2 rounded-full surface-high px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-on-surface">
-                <span className="live-dot bg-primary" />
-                Live pipeline
-              </span>
-            </div>
-            <div className="space-y-3">
-              <CardTitle className="max-w-4xl text-4xl font-medium tracking-tight text-on-surface md:text-5xl">
-                Founder Control Room
-              </CardTitle>
-              <CardDescription className="max-w-3xl text-base leading-relaxed text-on-surface-variant">
-                Review what needs action now: new signals, open promises, pending drafts, and worker output tied to your connected sources.
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="grid gap-4 pt-0">
+    <div className="bento-full-grid gap-6 max-w-7xl mx-auto pt-24 pb-12">
+      {/* Hero Section - Horizontal split layout */}
+      <section className="bento-hero">
+        <div className="bento-hero-left">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+            </span>
+            <span className="text-xs font-medium uppercase tracking-widest text-on-surface-variant">System Active</span>
+          </div>
+          <h1 className="bento-hero-title">
+            Overview
+          </h1>
+          <p className="bento-hero-description">
+            {drafts.length + promises.length} tasks require your attention. Your workers are active and monitoring your sources.
+          </p>
+          <div className="flex flex-wrap gap-4 mt-6">
             {isAuthenticated ? (
               <>
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="rounded-xl surface px-4 py-4">
-                    <p className="text-xs font-medium uppercase tracking-wider text-on-surface-variant">Sources connected</p>
-                    <p className="mt-2 text-3xl font-medium tracking-tight text-on-surface">{connectedSourceCount}/2</p>
-                  </div>
-                  <div className="rounded-xl surface px-4 py-4">
-                    <p className="text-xs font-medium uppercase tracking-wider text-on-surface-variant">Drafts waiting</p>
-                    <p className="mt-2 text-3xl font-medium tracking-tight text-on-surface">{drafts.length}</p>
-                  </div>
-                  <div className="rounded-xl surface px-4 py-4">
-                    <p className="text-xs font-medium uppercase tracking-wider text-on-surface-variant">Open promises</p>
-                    <p className="mt-2 text-3xl font-medium tracking-tight text-on-surface">{promises.length}</p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <Button asChild size="lg" className="bg-primary text-on-primary hover:bg-primary/90">
-                    <Link href="#drafts">
-                      Review Drafts
-                      <ArrowRight className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                  <Button asChild size="lg" variant="outline" className="border-outline text-on-surface hover:bg-state-layer-hover">
-                    <Link href="/ingest">Connect Sources</Link>
-                  </Button>
-                  <Button asChild size="lg" variant="outline" className="border-outline text-on-surface hover:bg-state-layer-hover">
-                    <Link href="/privacy">Open Archive</Link>
-                  </Button>
-                  <Button asChild size="lg" variant="outline" className="border-outline text-on-surface hover:bg-state-layer-hover">
-                    <Link href="/guide">Ask Mentor</Link>
-                  </Button>
-                </div>
+                <Button asChild size="lg" className="bg-primary text-on-primary hover:bg-primary/90">
+                  <Link href="#drafts">
+                    Review Drafts
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+                <Button asChild size="lg" variant="outline" className="border-outline text-on-surface hover:bg-state-layer-hover">
+                  <Link href="/ingest">Connect Sources</Link>
+                </Button>
               </>
             ) : (
-              <div className="flex flex-wrap gap-3">
+              <>
                 <Button asChild size="lg" className="bg-primary text-on-primary hover:bg-primary/90">
                   <Link href="/sign-up">Create Workspace</Link>
                 </Button>
                 <Button asChild size="lg" variant="outline" className="border-outline text-on-surface hover:bg-state-layer-hover">
                   <Link href="/sign-in">Sign In</Link>
                 </Button>
-              </div>
+              </>
             )}
-          </CardContent>
-        </Card>
-
-        <Card className="bg-surface">
-          <CardHeader className="gap-4">
-            <Badge variant="secondary">Workspace</Badge>
-            <CardTitle className="text-2xl font-medium tracking-tight text-on-surface">
-              {isAuthenticated ? "Ready" : "Locked"}
-            </CardTitle>
-            <CardDescription className="text-base text-on-surface-variant">
-              {isAuthenticated
-                ? "Use the links below to open the data surfaces that already exist in your workspace."
-                : "Authenticate to unlock founder-specific operations, signals, drafts, and prep."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            <div className="rounded-xl surface-high px-5 py-4">
-              <p className="text-xs font-medium uppercase tracking-wider text-on-surface-variant">Current identity</p>
-              <p className="mt-2 text-lg font-medium tracking-tight text-on-surface">
-                {user?.full_name || user?.email || "anonymous"}
-              </p>
+          </div>
+        </div>
+        <div className="bento-hero-right">
+          <div className="flex flex-col gap-2 w-full">
+            <div className="bento-stat-item">
+              <span className="bento-stat-label">Sources</span>
+              <span className="bento-stat-value">{connectedSourceCount}/2</span>
             </div>
-            <div className="rounded-xl surface-high px-5 py-4">
-              <p className="text-xs font-medium uppercase tracking-wider text-on-surface-variant">Connected sources</p>
-              <p className="mt-2 text-lg font-medium tracking-tight text-on-surface">
-                {user?.google_connected ? "Google" : "Google off"} / {user?.slack_connected ? "Slack" : "Slack off"}
-              </p>
+            <div className="bento-stat-item">
+              <span className="bento-stat-label">Drafts</span>
+              <span className="bento-stat-value">{drafts.length}</span>
             </div>
-            <div className="rounded-xl surface-high px-5 py-4">
-              <p className="text-xs font-medium uppercase tracking-wider text-on-surface-variant">Encrypted workspace</p>
-              <p className="mt-2 text-lg font-medium tracking-tight text-on-surface">
-                {privateKey ? "Unlocked" : "Locked"}
-              </p>
-              <p className="mt-1 text-sm text-on-surface-variant">
-                {privateKey ? "Client decryption available in this session" : "Unlock on demand from the archive page"}
-              </p>
+            <div className="bento-stat-item">
+              <span className="bento-stat-label">Promises</span>
+              <span className="bento-stat-value">{promises.length}</span>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        {metrics.map(({ label, value, icon: Icon, href, detail }, index) => (
-          <Link key={label} href={href} className="block">
-            <Card className="bg-surface hover:shadow-soft-md transition-shadow duration-200">
-              <CardContent className="pt-6">
-              <div
-                className={`mb-4 flex h-12 w-12 items-center justify-center rounded-full ${
-                  index % 2 === 0 ? "bg-primary-container text-on-primary-container" : "bg-surface-high text-on-surface"
-                }`}
-              >
-                <Icon className="h-5 w-5" />
-              </div>
-              <p className="text-xs font-medium uppercase tracking-wider text-on-surface-variant">{label}</p>
-              <p className="mt-3 text-3xl font-medium tracking-tight text-on-surface">{value}</p>
-              <p className="mt-2 text-xs font-medium uppercase tracking-wider text-on-surface-variant">{detail}</p>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-      </section>
-
-      {isAuthenticated ? (
-        <section className="grid gap-5 xl:grid-cols-[minmax(0,1.4fr)_360px]">
-          <Card className="panel-pro">
-            <CardHeader>
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge>Runtime Dashboard</Badge>
-                <span className="inline-flex items-center gap-2 rounded-full border border-border/70 px-3 py-1 text-xs uppercase tracking-[0.18em] text-foreground/65">
-                  <span className="live-dot" />
-                  Live state
-                </span>
-              </div>
-              <CardTitle className="font-sans text-3xl font-bold tracking-tighter uppercase tracking-[-0.05em]">
-                System Status
-              </CardTitle>
-              <CardDescription className="text-base">
-                Live view of the system, active tasks in progress, and recent activity moving through the pipeline.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              {opsStatus ? (
-                <>
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    {dashboardMetrics.map((metric) => (
-                      <motion.div
-                        key={metric.label}
-                        className={`pipeline-bar rounded-[1.2rem] border border-border/70 px-4 py-4 shadow-lg ${metric.accent}`}
-                        animate={{ y: [0, -2, 0] }}
-                        transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
-                      >
-                        <p className="mono-label opacity-70">{metric.label}</p>
-                        <p className="mt-2 text-4xl font-black tracking-[-0.08em]">{metric.value}</p>
-                      </motion.div>
-                    ))}
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <div className="rounded-[1.2rem] border border-border/70 px-4 py-4 shadow-lg bg-background">
-                      <p className="mono-label text-foreground/50">System Status</p>
-                      <p className="mt-2 flex items-center gap-3 text-2xl font-bold tracking-tighter uppercase text-foreground">
-                        <span className="live-dot" />
-                        {opsStatus.runner.status}
-                      </p>
-                      <p className="mt-1 text-sm text-foreground/65">
-                        Polls every {opsStatus.runner.poll_interval_seconds}s
-                      </p>
-                    </div>
-                    <div className="rounded-[1.2rem] border border-border/70 px-4 py-4 shadow-lg bg-background">
-                      <p className="mono-label text-foreground/50">Queue</p>
-                      {opsStatus.queue.user_counts.pending === 0 && opsStatus.queue.user_counts.running === 0 ? (
-                        <p className="mt-2 text-sm text-foreground/70 font-bold">Your AI organization is fully caught up. No pending blockers.</p>
-                      ) : (
-                        <p className="mt-2 text-2xl font-bold tracking-tighter uppercase text-foreground">
-                          {opsStatus.queue.user_counts.pending} pending / {opsStatus.queue.user_counts.running} running
-                        </p>
-                      )}
-                      <p className="mt-1 text-sm text-foreground/65">
-                        Founder-specific tasks waiting or executing
-                      </p>
-                    </div>
-                    <div className="rounded-[1.2rem] border border-border/70 px-4 py-4 shadow-lg bg-background">
-                      <p className="mono-label text-foreground/50">AI Assistant Focus</p>
-                      <p className="mt-2 text-2xl font-bold tracking-tighter uppercase text-foreground">
-                        {Object.entries(opsStatus.workers.by_pillar)
-                          .map(([pillar, count]) => `${pillar.toLowerCase()}:${count}`)
-                          .join(" / ") || "Monitoring Slack/Email"}
-                      </p>
-                      <p className="mt-1 text-sm text-foreground/65">
-                        Active agent runs by pillar
-                      </p>
-                    </div>
-                  </div>
-
-                  <div id="worker-runtime" className="space-y-3">
-                    <div className="flex items-end justify-between gap-3">
-                      <div>
-                        <p className="mono-label text-foreground/50">Active workers</p>
-                        <h3 className="mt-2 text-2xl font-bold tracking-tighter uppercase tracking-tight text-foreground">
-                          Worker Runtime
-                        </h3>
-                      </div>
-                      <Button asChild variant="link" className="h-auto p-0 text-xs font-black uppercase tracking-[0.18em]">
-                        <Link href="/workers">+ Hire more workers</Link>
-                      </Button>
-                    </div>
-
-                    {hiredWorkers.length === 0 ? (
-                      <div className="border border-border px-4 py-8  bg-background text-center text-sm text-foreground/60">
-                        No workers are hired yet. Provision them from the worker directory.
-                      </div>
-                    ) : (
-                      <div className="grid gap-3 md:grid-cols-2">
-                        {hiredWorkers.map((worker) => (
-                          <div
-                            key={worker.worker_key}
-                            className="status-breathe rounded-[1.2rem] border border-border/70 px-4 py-4 shadow-lg bg-background"
-                          >
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                              <div>
-                                <p className="flex items-center gap-2 text-lg font-black uppercase tracking-tight text-foreground">
-                                  <Activity className="h-4 w-4 text-primary" />
-                                  {worker.name}
-                                </p>
-                                <p className="text-sm text-foreground/60">
-                                  {worker.description}
-                                </p>
-                              </div>
-                              <Badge variant="outline">{worker.live_status}</Badge>
-                            </div>
-                            <p className="mt-3 text-sm leading-7 text-foreground/75">
-                              Monitoring: {worker.config.monitor_targets || "Default routing"}
-                            </p>
-                            <p className="text-xs uppercase tracking-[0.18em] text-foreground/50">
-                              Vault Mode: founder review required before send
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="flex items-end justify-between gap-3">
-                      <div>
-                        <p className="mono-label text-foreground/50">Current ingestion</p>
-                        <h3 className="mt-2 text-2xl font-bold tracking-tighter uppercase tracking-tight text-foreground">
-                          Recent Activity
-                        </h3>
-                      </div>
-                      <Badge variant="outline">
-                        {opsStatus.active_ingestions.length} visible
-                      </Badge>
-                    </div>
-
-                    {opsStatus.active_ingestions.length === 0 ? (
-                      <div className="border border-border px-4 py-8  bg-background text-center text-sm text-foreground/60">
-                        No user ingestion tasks are pending or running right now.
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {opsStatus.active_ingestions.map((task) => (
-                          <div
-                            key={task.id}
-                            className="status-breathe rounded-[1.2rem] border border-border/70 px-4 py-4 shadow-lg bg-background"
-                          >
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                              <div>
-                                <p className="flex items-center gap-2 text-lg font-black uppercase tracking-tight text-foreground">
-                                  <Activity className="h-4 w-4 text-primary" />
-                                  {task.source || "UNKNOWN"} · {task.status}
-                                </p>
-                                <p className="text-sm text-foreground/60">
-                                  {task.topic || task.trace_id || "Untitled ingestion"}
-                                </p>
-                              </div>
-                              <p className="mono-label text-foreground/50">
-                                {new Date(task.updated_at).toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                              </p>
-                            </div>
-                            <p className="mt-3 text-sm leading-7 text-foreground/75">
-                              {task.preview || "No preview available."}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div className="border border-border px-4 py-12  bg-background text-center text-sm text-foreground/60">
-                  Runtime status unavailable.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="panel-pro">
-            <CardHeader>
-              <Badge variant="outline">Queue Mix</Badge>
-              <CardTitle className="font-sans text-2xl font-black uppercase tracking-tight">
-                Task composition
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {opsStatus && Object.keys(opsStatus.queue.by_task_name).length > 0 ? (
-                Object.entries(opsStatus.queue.by_task_name)
-                  .sort((a, b) => b[1] - a[1])
-                  .slice(0, 8)
-                  .map(([taskName, count]) => (
-                    <div
-                      key={taskName}
-                      className="flex items-center justify-between rounded-[1rem] border border-border/70 px-4 py-3 shadow-lg bg-background"
-                    >
-                      <div>
-                        <p className="font-black uppercase tracking-tight text-foreground">
-                          {taskName}
-                        </p>
-                      </div>
-                      <Badge>{count}</Badge>
-                    </div>
-                  ))
-              ) : (
-                <div className="border border-border px-4 py-8  bg-background text-center text-sm text-foreground/60">
-                  No queue data yet.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </section>
-      ) : null}
-
-      {demoMode && isAuthenticated ? (
-        <section className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_420px]">
-          <Card className="panel-pro overflow-hidden">
-            <CardHeader className="border-b-2 border-border">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <Badge>Live Logs</Badge>
-                  <CardTitle className="mt-2 font-sans text-3xl font-black uppercase tracking-[-0.05em]">
-                    Pipeline terminal
-                  </CardTitle>
-                  <CardDescription className="text-base">
-                    Streaming demo pipeline logs from the admin websocket for the active demo user.
-                  </CardDescription>
-                </div>
-                <Badge variant={socketState === "open" ? "default" : "secondary"}>
-                  {socketState}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div
-                ref={logsViewportRef}
-                className="max-h-[460px] overflow-y-auto bg-foreground p-4 font-mono text-xs text-background"
-              >
-                {logs.length === 0 ? (
-                  <div className="rounded-[1rem] border border-dashed border-background/35 px-4 py-8 text-background/60">
-                    Waiting for runtime logs. Trigger a demo scenario from the bottom-left demo control.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {logs.map((log) => (
-                      <div
-                        key={log.log_id}
-                        className="rounded-[1rem] border border-background/25 bg-background/10 px-4 py-3"
-                      >
-                        <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-background/55">
-                          <span>{new Date(log.generated_at).toLocaleTimeString()}</span>
-                          <span>{log.pillar}</span>
-                          <span>{log.agent_name}</span>
-                          {log.step ? <span>{log.step}</span> : null}
-                        </div>
-                        <p className="mt-2 leading-6 text-background">{log.message}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="panel-pro">
-            <CardHeader>
-              <Badge variant="outline">Demo Snapshot</Badge>
-              <CardTitle className="font-sans text-2xl font-black uppercase tracking-tight">
-                Current seeded state
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              <div className="border border-border px-4 py-4  bg-background">
-                <p className="mono-label text-foreground/50">Archive items</p>
-                <p className="mt-2 text-4xl font-black">{snapshot?.archive_count ?? 0}</p>
-              </div>
-              <div className="border border-border px-4 py-4  bg-background">
-                <p className="mono-label text-foreground/50">Summaries</p>
-                <p className="mt-2 text-4xl font-black">{snapshot?.summary_count ?? 0}</p>
-              </div>
-              <div className="border border-border px-4 py-4  bg-background">
-                <p className="mono-label text-foreground/50">Log stream</p>
-                <p className="mt-2 text-4xl font-black">{logs.length}</p>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
-      ) : null}
-
-      <section id="promises" className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_420px]">
-        <Card className="panel-pro">
-          <CardHeader>
-            <Badge>Open Promises</Badge>
-            <CardTitle className="font-sans text-2xl font-black uppercase tracking-tight">
-              Commitments waiting on you
-            </CardTitle>
-            <CardDescription>
-              Recent promises extracted from your communications. Use this as the short list of follow-ups to clear.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {visiblePromises.length === 0 ? (
-              <div className="border border-border px-4 py-8 bg-background text-center text-sm text-foreground/60">
-                No open promises detected yet.
-              </div>
-            ) : (
-              visiblePromises.slice(0, 6).map((item) => (
-                <div key={item.id} className="border border-border px-4 py-4 bg-background">
-                  <p className="text-sm leading-7 text-foreground">{item.promise_text}</p>
-                  <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-foreground/50">
-                    {new Date(item.created_at).toLocaleString()}
-                  </p>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="panel-pro">
-          <CardHeader>
-            <Badge variant="outline">Archive</Badge>
-            <CardTitle className="font-sans text-2xl font-black uppercase tracking-tight">
-              Stored source data
-            </CardTitle>
-            <CardDescription>
-              Open the encrypted archive to inspect imported content, decrypt it in-browser, or remove entries.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="border border-border px-4 py-4 bg-background">
-              <p className="mono-label text-foreground/50">Workspace key</p>
-              <p className="mt-2 text-2xl font-black text-foreground">
-                {privateKey ? "Unlocked" : "Locked"}
-              </p>
-              <p className="mt-2 text-sm text-foreground/65">
-                {privateKey ? "Archive entries can be decrypted in this session." : "Open Archive and unlock the workspace to view original private content."}
-              </p>
+      {/* Pulse Tiles - 3 equal square tiles - Cols 1-8 */}
+      <section className="bento-pulse-row" id="signals">
+        {metrics.slice(0, 3).map((metric) => {
+          const Icon = metric.icon;
+          return (
+            <div key={metric.label} className="bento-pulse-tile">
+              <Icon className="h-8 w-8 text-primary bento-pulse-icon" />
+              <p className="bento-pulse-label">{metric.label}</p>
+              <p className="bento-pulse-value">{metric.value}</p>
             </div>
-            <Button asChild className="w-full">
-              <Link href="/privacy">Open Archive</Link>
-            </Button>
-          </CardContent>
-        </Card>
+          );
+        })}
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_360px]">
-        <div className="space-y-4">
-          <div id="signals" className="flex items-end justify-between gap-3">
+      {/* Main Content - Cols 1-8 */}
+      <div className="bento-main">
+        {/* Signals Card */}
+        <div className="bento-card" id="signals">
+          <div className="bento-card-header">
             <div>
-              <p className="mono-label text-foreground/50">Live feed</p>
-              <h2 className="mt-2 flex items-center gap-3 text-4xl font-black uppercase tracking-[-0.06em] text-foreground">
-                <Waves className="h-7 w-7 text-primary" />
-                Signals from the org
+              <p className="bento-label">Live feed</p>
+              <h2 className="bento-title">
+                <Waves className="h-5 w-5 text-primary" />
+                Actionable Signals
               </h2>
             </div>
             <Badge variant="outline">{featured.length} visible</Badge>
           </div>
-
-          {loading ? (
-            <Card className="border border-border bg-card ">
-              <CardContent className="py-20 text-center text-sm text-foreground/60">
-                Loading operator surface...
-              </CardContent>
-            </Card>
-          ) : !isAuthenticated ? (
-            <Card className="border border-border bg-card ">
-              <CardContent className="space-y-4 py-16 text-center">
-                <Layers3 className="mx-auto h-10 w-10 text-foreground" />
-                <h3 className="text-2xl font-black uppercase text-foreground">Private feed locked</h3>
-                <p className="mx-auto max-w-2xl text-sm leading-7 text-foreground/65">
-                  Sign in to see live worker alerts, mentor notes, meeting prep, promise tracking, and drafts generated in the background.
-                </p>
-              </CardContent>
-            </Card>
-          ) : featured.length === 0 ? (
-            <Card className="border border-border bg-card ">
-              <CardContent className="space-y-4 py-16 text-center">
-                <Bell className="mx-auto h-10 w-10 text-foreground" />
-                <h3 className="text-2xl font-black uppercase text-foreground">Waiting for the first signal</h3>
-                <p className="mx-auto max-w-2xl text-sm leading-7 text-foreground/65">
-                  Connect sources or push a manual ingest event. The assistant and workers will start filing alerts here.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {featured.map((signal, index) => (
-                <motion.div
-                  key={signal.id || `${signal.notification_type}-${signal.created_at}-${index}`}
-                  initial={{ opacity: 0, y: 18 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.22, delay: index * 0.03 }}
-                >
-                  <SignalCard signal={signal as SignalItem} />
-                </motion.div>
-              ))}
-            </div>
-          )}
+          <div className="bento-card-content">
+            {loading ? (
+              <div className="bento-empty">
+                <p className="text-sm text-on-surface-variant">Loading operator surface...</p>
+              </div>
+            ) : !isAuthenticated ? (
+              <div className="bento-empty">
+                <Layers3 className="h-8 w-8 text-on-surface-variant mx-auto" />
+                <p className="text-sm text-on-surface-variant mt-2">Sign in to see live signals</p>
+              </div>
+            ) : featured.length === 0 ? (
+              <div className="bento-empty">
+                <Bell className="h-8 w-8 text-on-surface-variant mx-auto" />
+                <p className="text-sm text-on-surface-variant mt-2">Waiting for the first signal</p>
+                <p className="text-xs text-on-surface-variant/60 mt-1">Connect sources to start receiving alerts</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {featured.map((signal, index) => (
+                  <motion.div
+                    key={signal.id || `${signal.notification_type}-${signal.created_at}-${index}`}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2, delay: index * 0.03 }}
+                  >
+                    <SignalCard signal={signal as SignalItem} />
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="space-y-4">
-          <div id="drafts">
+        {/* Drafts Card */}
+        <div className="bento-card" id="drafts">
+          <div className="bento-card-header">
+            <div>
+              <p className="bento-label">Pending review</p>
+              <h2 className="bento-title">
+                <Inbox className="h-5 w-5 text-primary" />
+                Draft Replies
+              </h2>
+            </div>
+            <Badge variant="outline">{drafts.length}</Badge>
+          </div>
+          <div className="bento-card-content">
             <DraftReviewer />
           </div>
         </div>
-      </section>
+      </div>
+
+      {/* Sidebar - Cols 9-12 */}
+      <div className="bento-sidebar-col">
+        {/* Operator Card - Workspace + Identity */}
+        <div className="bento-sidebar-card">
+          <h2 className="bento-sidebar-title">
+            <span className="inline-flex items-center gap-2">
+              <Lock className="h-4 w-4 text-primary" />
+              {isAuthenticated ? "Ready" : "Locked"}
+            </span>
+          </h2>
+          <div className="bento-operator-item">
+            <p className="bento-operator-label">Current identity</p>
+            <p className="bento-operator-value">{user?.full_name || user?.email || "anonymous"}</p>
+          </div>
+          <div className="bento-operator-item">
+            <p className="bento-operator-label">Connected sources</p>
+            <p className="bento-operator-value">
+              {user?.google_connected ? "Google" : "Google off"} / {user?.slack_connected ? "Slack" : "Slack off"}
+            </p>
+          </div>
+          <div className="bento-operator-item">
+            <p className="bento-operator-label">Encrypted workspace</p>
+            <p className="bento-operator-value">{privateKey ? "Unlocked" : "Locked"}</p>
+            <p className="bento-operator-description">
+              {privateKey ? "Client decryption available" : "Unlock from archive page"}
+            </p>
+          </div>
+          <div className="bento-operator-item">
+            <p className="bento-operator-label">Quick actions</p>
+            <div className="flex flex-wrap gap-2 mt-2">
+              <Button asChild size="sm" variant="outline" className="text-xs">
+                <Link href="/privacy">Open Archive</Link>
+              </Button>
+              <Button asChild size="sm" variant="outline" className="text-xs">
+                <Link href="/workers">Workers</Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Open Promises Card */}
+        <div className="bento-sidebar-card" id="promises">
+          <div className="bento-card-header">
+            <div>
+              <p className="bento-label">Commitments</p>
+              <h2 className="bento-title">
+                <AlarmClock className="h-5 w-5 text-primary" />
+                Open Promises
+              </h2>
+            </div>
+          </div>
+          <div className="bento-card-content">
+            {visiblePromises.length === 0 ? (
+              <div className="bento-empty">
+                <p className="text-sm text-on-surface-variant">No open promises detected</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {visiblePromises.slice(0, 5).map((item) => (
+                  <div key={item.id} className="promise-item">
+                    <p className="text-sm text-on-surface">{item.promise_text}</p>
+                    <p className="text-xs text-on-surface-variant mt-1">
+                      {new Date(item.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* System Intelligence Tray - Full width at bottom */}
+      {isAuthenticated && (
+        <section className="system-tray col-span-full">
+          <button
+            className="system-tray-toggle"
+            onClick={() => setSystemTrayOpen(!systemTrayOpen)}
+          >
+            <div className="flex items-center gap-3">
+              <Server className="h-4 w-4 text-on-surface-variant" />
+              <span className="text-sm font-medium text-on-surface-variant uppercase tracking-wider">
+                System Intelligence
+              </span>
+              <Badge variant="outline" className="text-xs">
+                {opsStatus?.runner.status || "Unknown"}
+              </Badge>
+            </div>
+            {systemTrayOpen ? (
+              <ChevronUp className="h-4 w-4 text-on-surface-variant" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-on-surface-variant" />
+            )}
+          </button>
+
+          <AnimatePresence>
+            {systemTrayOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="system-tray-content"
+              >
+                <div className="grid gap-4 md:grid-cols-3">
+                  {/* System Status */}
+                  <div className="system-card">
+                    <h3 className="system-card-title">System Status</h3>
+                    <div className="system-metrics-grid">
+                      {dashboardMetrics.map((metric) => (
+                        <div key={metric.label} className={`system-metric ${metric.accent}`}>
+                          <p className="system-metric-label">{metric.label}</p>
+                          <p className="system-metric-value">{metric.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="system-info-row">
+                      <span className="flex items-center gap-2 text-xs text-on-surface-variant">
+                        <span className="live-dot" />
+                        {opsStatus?.runner.status || "loading"}
+                      </span>
+                      <span className="text-xs text-on-surface-variant">
+                        Polls every {opsStatus?.runner.poll_interval_seconds}s
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Queue Mix */}
+                  <div className="system-card">
+                    <h3 className="system-card-title">Task Composition</h3>
+                    {opsStatus && Object.keys(opsStatus.queue.by_task_name).length > 0 ? (
+                      <div className="system-queue-list">
+                        {Object.entries(opsStatus.queue.by_task_name)
+                          .sort((a, b) => b[1] - a[1])
+                          .slice(0, 5)
+                          .map(([taskName, count]) => (
+                            <div key={taskName} className="system-queue-item">
+                              <span className="text-xs text-on-surface">{taskName}</span>
+                              <Badge variant="outline" className="text-xs">{count}</Badge>
+                            </div>
+                          ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-on-surface-variant">No queue data</p>
+                    )}
+                  </div>
+
+                  {/* Live Logs (Demo only) */}
+                  {demoMode && (
+                    <div className="system-card">
+                      <h3 className="system-card-title">
+                        Pipeline Terminal
+                        <Badge variant={socketState === "open" ? "default" : "secondary"} className="ml-2 text-xs">
+                          {socketState}
+                        </Badge>
+                      </h3>
+                      <div
+                        ref={logsViewportRef}
+                        className="system-logs-viewport"
+                      >
+                        {logs.length === 0 ? (
+                          <p className="text-xs text-on-surface-variant">Waiting for logs...</p>
+                        ) : (
+                          logs.slice(0, 10).map((log) => (
+                            <div key={log.log_id} className="system-log-entry">
+                              <span className="text-[10px] text-on-surface-variant uppercase">
+                                {log.pillar}
+                              </span>
+                              <p className="text-xs text-on-surface truncate">{log.message}</p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </section>
+      )}
     </div>
   );
 }

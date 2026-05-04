@@ -4,11 +4,18 @@ from groq import Groq
 from pinecone import Pinecone
 from sentence_transformers import SentenceTransformer
 
-_model = SentenceTransformer("all-MiniLM-L6-v2")
+_model = None
+
+
+def _get_model():
+    global _model
+    if _model is None:
+        _model = SentenceTransformer("all-MiniLM-L6-v2")
+    return _model
 
 
 def _embed(text: str) -> list[float]:
-    return _model.encode(text).tolist()
+    return _get_model().encode(text).tolist()
 
 
 def _groq_client() -> Groq:

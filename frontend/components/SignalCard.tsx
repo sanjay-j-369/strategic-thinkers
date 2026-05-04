@@ -1,6 +1,9 @@
 "use client";
 
-import { AlertTriangle, ArrowUpRight, BellRing, Bot, Briefcase, Clock3, Flame, Radar, Sparkles } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { AlertTriangle, ArrowUpRight, BellRing, Bot, Briefcase, ChevronDown, ChevronUp, Clock3, Flame, Radar, Sparkles } from "lucide-react";
+import { useState } from "react";
 
 import { GuideCard } from "@/components/GuideCard";
 import { PrepCard } from "@/components/PrepCard";
@@ -45,6 +48,7 @@ function signalTone(severity?: string) {
 }
 
 export function SignalCard({ signal }: { signal: SignalItem }) {
+  const [expanded, setExpanded] = useState(false);
   const payload = signal.payload;
   const embeddedType =
     payload && typeof payload === "object" && "type" in payload ? String(payload.type) : signal.type;
@@ -61,7 +65,7 @@ export function SignalCard({ signal }: { signal: SignalItem }) {
   const timestamp = signal.created_at || signal.generated_at;
 
   return (
-    <Card className="border border-border bg-card  overflow-hidden">
+    <Card className="border border-border bg-card overflow-hidden cursor-pointer" onClick={() => setExpanded(!expanded)}>
       <CardHeader className="border-b-2 border-border pb-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="flex items-start gap-4">
@@ -89,21 +93,45 @@ export function SignalCard({ signal }: { signal: SignalItem }) {
             </div>
           </div>
 
-          {payload && typeof payload === "object" && typeof payload.source_url === "string" ? (
-            <a
-              href={payload.source_url}
-              target="_blank"
-              rel="noreferrer"
-              className=" inline-flex items-center gap-2 border border-border bg-card px-3 py-2 text-xs font-black uppercase tracking-[0.18em]"
-            >
-              Source
-              <ArrowUpRight className="h-3.5 w-3.5" />
-            </a>
-          ) : null}
+          <div className="flex items-center gap-3">
+            {signal.body && signal.body.length > 300 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+                className="inline-flex items-center gap-1.5 border border-border bg-card px-3 py-2 text-xs font-black uppercase tracking-[0.18em] hover:bg-accent"
+              >
+                {expanded ? (
+                  <>
+                    <ChevronUp className="h-3.5 w-3.5" />
+                    Show Less
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-3.5 w-3.5" />
+                    Show More
+                  </>
+                )}
+              </button>
+            )}
+            {payload && typeof payload === "object" && typeof payload.source_url === "string" ? (
+              <a
+                href={payload.source_url}
+                target="_blank"
+                rel="noreferrer"
+                className=" inline-flex items-center gap-2 border border-border bg-card px-3 py-2 text-xs font-black uppercase tracking-[0.18em]"
+              >
+                Source
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </a>
+            ) : null}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4 pt-6">
-        <p className="text-sm leading-7 text-foreground/80">{signal.body || "No body available."}</p>
+        <div className="text-sm leading-7 text-foreground dark:text-foreground/90 [&_strong]:font-semibold [&_h1]:text-xl [&_h2]:text-lg [&_h3]:text-base [&_ul]:mt-2 [&_ol]:mt-2 [&_li]:mt-1">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {signal.body ? (expanded ? signal.body : (signal.body.length > 300 ? signal.body.slice(0, 300) + "..." : signal.body)) : "No body available."}
+          </ReactMarkdown>
+        </div>
         {payload && typeof payload === "object" && Object.keys(payload).length > 0 ? (
           <div className="grid gap-2 md:grid-cols-2">
             {Object.entries(payload)

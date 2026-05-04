@@ -1,0 +1,60 @@
+[
+  {
+    "timestamp": "2026-04-05T10:00:00Z",
+    "source": "gmail",
+    "sender": {
+      "name": "Sarah Chen",
+      "email": "sarah.chen@acme.io"
+    },
+    "subject": "RE: Head of Engineering Search - Shortlisted Candidates",
+    "body": "Hi team,\n\nFollowing up on our engineering leadership search. Our recruiting team has shortlisted 3 candidates from the initial pipeline. Attaching their resumes below for your review.\n\n**Candidate 1: Marcus Rodriguez**\n- 12 years experience, previously VP Eng at Series C fintech\n- Strong distributed systems background\n- Available immediately\n\n**Candidate 2: Priya Patel**\n- 8 years experience, currently Staff Engineer at FAANG\n- Led team of 15 engineers\n- 3 weeks notice period\n\n**Candidate 3: James Wilson**\n- 10 years experience, ex-Founder (acquired)\n- Deep product engineering background\n- Available in 4 weeks\n\nCould we schedule time to discuss interview approach this week?\n\nBest,\nSarah",
+    "context_tags": ["hiring", "engineering", "leadership", "candidates"],
+    "source_id": "gmail-hiring-001"
+  },
+  {
+    "timestamp": "2026-04-05T10:30:00Z",
+    "source": "slack",
+    "sender": {
+      "name": "Sarah Chen"
+    },
+    "channel": "#hiring",
+    "body": "Quick heads up - Marcus Rodriguez (Head of Eng candidate) is very interested. He asked about our Series B timeline and equity terms. Worth getting him on calendar ASAP before he talks to other companies.",
+    "context_tags": ["hiring", "engineering", "timeline", "urgent"],
+    "source_id": "slack-hiring-002"
+  },
+  {
+    "timestamp": "2026-04-05T11:00:00Z",
+    "source": "gmail",
+    "sender": {
+      "name": "Marcus Rodriguez",
+      "email": "marcus.rodriguez@email.com"
+    },
+    "subject": "Introduction - Head of Engineering Opportunity",
+    "body": "Hi,\n\nI was reached out to by your team about the Head of Engineering position and I'm very excited to learn more about the role.\n\nA bit about my background:\n- Led engineering teams of 20+ at my last company\n- Successfully scaled infrastructure from 10k to 1M+ users\n- Experience with Series A through Series C growth stages\n\nI'd love to schedule a call to discuss how I might be able to contribute to ACME's next chapter.\n\nAre you available for a 30-minute call this week?\n\nBest regards,\nMarcus",
+    "context_tags": ["hiring", "engineering", "candidate", "intro"],
+    "source_id": "gmail-hiring-003"
+  },
+  {
+    "timestamp": "2026-04-05T14:00:00Z",
+    "source": "slack",
+    "sender": {
+      "name": "HR Team"
+    },
+    "channel": "#recruiting",
+    "body": "We've scheduled initial screens with all 3 candidates:\n- Marcus Rodriguez: Thursday 2pm\n- Priya Patel: Friday 10am\n- James Wilson: Next Monday 3pm\n\nAll initial screens are 45 minutes. Please block your calendars for debriefs immediately after each call.",
+    "context_tags": ["hiring", "scheduling", "logistics"],
+    "source_id": "slack-hiring-004"
+  },
+  {
+    "timestamp": "2026-04-05T16:30:00Z",
+    "source": "gmail",
+    "sender": {
+      "name": "David Kim",
+      "email": "david.kim@acme.io"
+    },
+    "subject": "Interview debrief format - Head of Engineering",
+    "body": "Team,\n\nLet's align on interview structure for the engineering leadership candidates. I suggest the following focus areas:\n\n1. Technical depth - system design and architecture\n2. Leadership philosophy - team building and culture\n3. Product sense - working with founders and PMs\n4. Growth stage experience - scaling organizations\n\nI'll own the product sense loop. Who wants to take the others?\n\nWe should also prepare specific questions around their experience with our tech stack (Python, PostgreSQL, AWS).\n\nLet me know thoughts.\n\nDavid",
+    "context_tags": ["hiring", "engineering", "interview", "preparation"],
+    "source_id": "gmail-hiring-005"
+  }
+]

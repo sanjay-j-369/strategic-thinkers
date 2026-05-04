@@ -4,28 +4,29 @@
 
 @layer base {
   :root {
-    /* Iron & Amber - Light Mode */
-    --background: 30 60% 98%;
-    --foreground: 30 30% 10%;
+    /* Iron & Amber - Light Mode - Paper-like Material 3 */
+    /* Background: warm off-white */
+    --background: 30 30% 98%;
+    --foreground: 30 25% 10%;
 
-    /* Surface Containers - tonal depth without borders */
-    --surface-low: 30 50% 99%;
-    --surface: 30 60% 98%;
-    --surface-high: 30 40% 95%;
+    /* Surface Containers - tonal elevation (white cards on warm background) */
+    --surface-low: 30 30% 99%;
+    --surface: 30 25% 97%;
+    --surface-high: 30 20% 95%;
     --surface-elevated: 0 0% 100%;
-    --surface-variant: 30 25% 92%;
+    --surface-variant: 30 20% 92%;
 
-    /* Amber Primary */
-    --primary: 30 80% 32%;
+    /* Amber Primary - rich amber for buttons and accents */
+    --primary: 25 85% 35%;
     --primary-container: 30 100% 85%;
     --on-primary: 0 0% 100%;
-    --on-primary-container: 30 80% 15%;
+    --on-primary-container: 25 85% 15%;
 
     /* Secondary */
     --secondary: 30 15% 45%;
-    --secondary-container: 30 15% 90%;
+    --secondary-container: 30 20% 90%;
     --on-secondary: 0 0% 100%;
-    --on-secondary-container: 30 15% 18%;
+    --on-secondary-container: 30 25% 18%;
 
     /* Tertiary */
     --tertiary: 35 50% 40%;
@@ -39,42 +40,42 @@
     --on-error: 0 0% 100%;
     --on-error-container: 0 75% 18%;
 
-    /* On-Surface text hierarchy */
-    --on-surface: 30 30% 10%;
-    --on-surface-variant: 30 10% 40%;
-    --outline: 30 8% 60%;
-    --outline-variant: 30 8% 82%;
+    /* On-Surface text hierarchy - Iron charcoal for readability */
+    --on-surface: 30 25% 10%;
+    --on-surface-variant: 30 15% 35%;
+    --outline: 30 10% 55%;
+    --outline-variant: 30 8% 78%;
 
     /* Inverse */
-    --inverse-surface: 30 30% 15%;
+    --inverse-surface: 30 25% 15%;
     --inverse-on-surface: 30 30% 95%;
 
     /* Scrim */
     --scrim: 30 20% 0%;
 
-    /* Soft shadows - no hard borders */
-    --shadow-1: 0 1px 2px 0 rgba(0,0,0,0.04), 0 1px 3px 1px rgba(0,0,0,0.06);
-    --shadow-2: 0 2px 4px 0 rgba(0,0,0,0.04), 0 4px 8px 2px rgba(0,0,0,0.06);
-    --shadow-3: 0 4px 8px 0 rgba(0,0,0,0.04), 0 8px 16px 4px rgba(0,0,0,0.06);
+    /* Soft shadows - Google-style subtle elevation */
+    --shadow-1: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.1);
+    --shadow-2: 0 4px 6px rgba(0,0,0,0.05), 0 2px 4px rgba(0,0,0,0.1);
+    --shadow-3: 0 10px 15px rgba(0,0,0,0.05), 0 4px 6px rgba(0,0,0,0.1);
 
     /* State layer - 10% opacity overlay */
-    --state-layer-hover: rgba(30, 30, 25, 0.10);
-    --state-layer-pressed: rgba(30, 30, 25, 0.14);
+    --state-layer-hover: rgba(30, 25, 20, 0.08);
+    --state-layer-pressed: rgba(30, 25, 20, 0.12);
 
     /* Legacy */
     --card: 0 0% 100%;
-    --card-foreground: 30 30% 10%;
+    --card-foreground: 30 25% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 30 30% 10%;
+    --popover-foreground: 30 25% 10%;
     --muted: 30 15% 92%;
-    --muted-foreground: 30 10% 45%;
+    --muted-foreground: 30 15% 40%;
     --accent: 30 40% 88%;
     --accent-foreground: 30 60% 25%;
     --destructive: 0 75% 50%;
     --destructive-foreground: 0 0% 100%;
     --border: 30 8% 85%;
     --input: 30 8% 85%;
-    --ring: 30 80% 32%;
+    --ring: 25 85% 35%;
   }
 
   .dark {
@@ -257,6 +258,11 @@
       border border-outline text-on-surface text-sm font-medium transition-all duration-200
       hover:shadow-soft active:scale-[0.98]
       disabled:pointer-events-none disabled:opacity-50;
+    background-color: #EFE9E0;
+  }
+
+  .dark .btn-outline {
+    background-color: transparent;
   }
 
   .btn-ghost {
@@ -277,7 +283,7 @@
 
   /* Navigation - text only, 32px gap */
   .nav-bar {
-    @apply relative flex items-center rounded-full p-1.5 gap-1 bg-surface-high font-sans;
+    @apply relative flex items-center rounded-full p-1.5 gap-8 bg-surface-high font-sans;
   }
 
   .nav-item {
@@ -293,21 +299,33 @@
     @apply text-on-surface;
   }
 
-  .nav-item .state-layer {
-    border-radius: 9999px;
-  }
-
   .nav-item:not(.active):hover .state-layer {
     opacity: 1;
   }
 
-  /* Top App Bar */
+  /* Nav link pill shape - state layer inherits rounded pill from parent interactive */
+  .nav-bar .interactive {
+    border-radius: 9999px;
+  }
+
+  .nav-bar .interactive .state-layer {
+    border-radius: inherit;
+  }
+
+  /* Top App Bar - integrated with background */
   .top-app-bar {
-    @apply sticky top-0 z-50 w-full py-3 glass-amber;
+    @apply sticky top-0 z-50 w-full py-3;
+    background-color: hsl(var(--surface));
+    border-bottom: 1px solid rgba(0,0,0,0.05);
   }
 
   .top-app-bar-content {
     @apply mx-auto grid max-w-7xl gap-6 pb-4 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center px-4 sm:px-6 lg:px-8;
+  }
+
+  .dark .top-app-bar {
+    background-color: hsl(var(--surface));
+    border-bottom: 1px solid rgba(255,255,255,0.05);
   }
 
   /* Dialog */
@@ -324,4 +342,272 @@
 /* Transitions */
 .transition-iron {
   transition: all 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* ====================
+   BENTO GRID LAYOUT
+   ==================== */
+
+/* Page Container - 12 column grid */
+.bento-page {
+  @apply max-w-7xl mx-auto;
+  pt: 96px; /* pt-24 for navbar breathing room */
+}
+
+/* Hero Section - Horizontal split: 60% left, 40% right */
+.bento-hero {
+  @apply grid gap-8 p-10 rounded-[24px] bg-[#FFFFFF] shadow-soft;
+  grid-template-columns: 3fr 2fr;
+  grid-column: 1 / 9;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dark .bento-hero {
+  @apply bg-[#1F1B16] shadow-none;
+}
+
+.bento-hero-left {
+  @apply space-y-4;
+  flex: 1;
+}
+
+.bento-hero-right {
+  @apply flex flex-col gap-3;
+  min-width: 200px;
+}
+
+.bento-hero-title {
+  @apply text-3xl font-medium tracking-tight text-on-surface;
+}
+
+.bento-hero-description {
+  @apply text-sm leading-relaxed text-on-surface-variant;
+}
+
+.bento-stat-item {
+  @apply flex flex-col items-center px-5 py-4 rounded-[20px] bg-[#F7F2EB] text-center min-w-[100px];
+}
+
+.bento-stat-item {
+  @apply flex flex-row items-center justify-between px-5 py-3 rounded-[16px] bg-[#F7F2EB] min-w-[180px];
+}
+
+.dark .bento-stat-item {
+  @apply bg-[#2A2520];
+}
+
+.bento-stat-label {
+  @apply text-xs font-medium uppercase tracking-wider text-on-surface-variant;
+}
+
+.bento-stat-value {
+  @apply text-2xl font-medium tracking-tight text-on-surface;
+}
+
+/* Pulse Tiles - 3 equal square tiles under hero */
+.bento-pulse-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  grid-column: 1 / 9;
+}
+
+.bento-pulse-tile {
+  @apply flex flex-col items-center justify-center p-8 rounded-[24px] bg-[#FFFFFF] shadow-soft aspect-square;
+  text-align: center;
+}
+
+.dark .bento-pulse-tile {
+  @apply bg-[#1F1B16] shadow-none;
+}
+
+.bento-pulse-icon {
+  @apply mb-3 text-primary;
+}
+
+.bento-pulse-label {
+  @apply text-[10px] font-medium uppercase tracking-wider text-on-surface-variant;
+}
+
+.bento-pulse-value {
+  @apply text-4xl font-medium tracking-tight text-on-surface mt-1;
+}
+
+/* Main Content Area - Cols 1-8 */
+.bento-main {
+  grid-column: 1 / 9;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Sidebar - Cols 9-12 */
+.bento-sidebar-col {
+  grid-column: 9 / 13;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Full Width Grid */
+.bento-full-grid {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(12, 1fr);
+  align-items: start;
+}
+
+/* Bento Cards - white cards with soft shadows */
+.bento-card {
+  @apply rounded-[24px] bg-[#FFFFFF] p-8 shadow-soft;
+}
+
+.dark .bento-card {
+  @apply bg-[#1F1B16] shadow-none;
+}
+
+.bento-card-header {
+  @apply flex items-start justify-between gap-4 mb-6;
+}
+
+.bento-label {
+  @apply text-[10px] font-medium uppercase tracking-widest text-on-surface-variant;
+}
+
+.bento-title {
+  @apply text-xl font-medium tracking-tight text-on-surface flex items-center gap-2 mt-1;
+}
+
+.bento-card-content {
+  @apply space-y-4;
+}
+
+.bento-empty {
+  @apply py-8 text-center;
+}
+
+/* Sidebar Cards - stacked in sidebar column */
+.bento-sidebar-card {
+  @apply rounded-[24px] bg-[#FFFFFF] p-8 shadow-soft;
+}
+
+.dark .bento-sidebar-card {
+  @apply bg-[#1F1B16] shadow-none;
+}
+
+.bento-sidebar-title {
+  @apply text-lg font-medium tracking-tight text-on-surface mb-4;
+}
+
+/* Operator Card - groups workspace and identity */
+.bento-operator-item {
+  @apply py-3 border-b border-outline/20 last:border-0;
+}
+
+.bento-operator-label {
+  @apply text-[10px] font-medium uppercase tracking-widest text-on-surface-variant;
+}
+
+.bento-operator-value {
+  @apply text-sm font-medium text-on-surface mt-0.5;
+}
+
+.bento-operator-description {
+  @apply text-xs text-on-surface-variant mt-0.5;
+}
+
+/* Promise Items */
+.promise-item {
+  @apply px-4 py-3 rounded-[16px] bg-[#F7F2EB];
+}
+
+.dark .promise-item {
+  @apply bg-[#2A2520];
+}
+
+/* ====================
+   SYSTEM INTELLIGENCE TRAY
+   ==================== */
+
+.system-tray {
+  @apply rounded-[24px] bg-[#FFFFFF] shadow-soft overflow-hidden;
+  grid-column: 1 / -1;
+}
+
+.dark .system-tray {
+  @apply bg-[#1F1B16] shadow-none;
+}
+
+.system-tray-toggle {
+  @apply w-full flex items-center justify-between px-6 py-4 text-left transition-colors duration-200;
+}
+
+.system-tray-toggle:hover {
+  background-color: var(--state-layer-hover);
+}
+
+.system-tray-content {
+  @apply px-6 pb-6 overflow-hidden;
+}
+
+.system-card {
+  @apply rounded-[20px] bg-[#F7F2EB] p-4 space-y-3;
+}
+
+.dark .system-card {
+  @apply bg-[#2A2520];
+}
+
+.system-card-title {
+  @apply text-sm font-medium text-on-surface flex items-center gap-2;
+}
+
+.system-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.system-metric {
+  @apply rounded-[16px] px-3 py-3 text-center;
+}
+
+.system-metric-label {
+  @apply text-[10px] font-medium uppercase tracking-wider opacity-70;
+}
+
+.system-metric-value {
+  @apply text-2xl font-medium tracking-tight mt-1;
+}
+
+.system-info-row {
+  @apply flex items-center justify-between text-xs text-on-surface-variant pt-2 border-t border-outline/20;
+}
+
+.system-queue-list {
+  @apply space-y-2;
+}
+
+.system-queue-item {
+  @apply flex items-center justify-between py-2;
+}
+
+.system-logs-viewport {
+  @apply max-h-[160px] overflow-y-auto space-y-2;
+}
+
+.system-log-entry {
+  @apply space-y-1;
+}
+
+/* Live dot animation */
+.live-dot {
+  @apply h-1.5 w-1.5 rounded-full bg-primary;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }

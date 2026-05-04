@@ -1,4 +1,6 @@
 import { AlertCircle, Clock3, Sparkles } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,8 +30,8 @@ export function GuideCard({ data }: { data: GuideCardData }) {
                 <Sparkles className="h-5 w-5 text-foreground" />
               </div>
               <div className="space-y-1">
-                <CardTitle className="text-lg">{data.question}</CardTitle>
-                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                <CardTitle className="text-lg text-foreground">{data.question}</CardTitle>
+                <div className="flex items-center gap-2 text-sm text-foreground/60">
                   <Clock3 className="h-4 w-4" />
                   {new Date(data.generated_at).toLocaleString()}
                 </div>
@@ -43,7 +45,7 @@ export function GuideCard({ data }: { data: GuideCardData }) {
         {data.analysis ? (
           <div className="rounded-xl border border-border bg-sky-50 dark:bg-sky-900/20 p-4">
             <p className="text-xs font-semibold text-sky-600 dark:text-sky-400 uppercase tracking-wide mb-2">Summary</p>
-            <p className="text-sm leading-7 text-slate-600 dark:text-slate-300">{data.analysis}</p>
+            <p className="text-sm leading-7 text-foreground">{data.analysis}</p>
           </div>
         ) : null}
 
@@ -56,8 +58,8 @@ export function GuideCard({ data }: { data: GuideCardData }) {
                   key={flag}
                   className="flex items-start gap-3 rounded-xl border border-border bg-card p-4"
                 >
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-slate-600 dark:text-slate-300" />
-                  <p className="text-sm leading-7 text-slate-600 dark:text-slate-300">{flag}</p>
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
+                  <p className="text-sm leading-7 text-foreground">{flag}</p>
                 </div>
               ))}
             </div>
@@ -67,12 +69,10 @@ export function GuideCard({ data }: { data: GuideCardData }) {
         {outputLines.length > 0 ? (
           <div>
             <p className="text-xs font-semibold text-sky-600 dark:text-sky-400 uppercase tracking-wide mb-3">Next Steps</p>
-            <div className="space-y-2">
-              {outputLines.map((line, index) => (
-                <p key={`${line}-${index}`} className="text-sm leading-7 text-slate-600 dark:text-slate-300">
-                  {line}
-                </p>
-              ))}
+            <div className="text-sm leading-7 text-foreground dark:text-foreground/90 [&_strong]:font-semibold [&_h1]:text-xl [&_h2]:text-lg [&_h3]:text-base [&_ul]:mt-2 [&_ol]:mt-2 [&_li]:mt-1">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {data.output}
+              </ReactMarkdown>
             </div>
           </div>
         ) : null}

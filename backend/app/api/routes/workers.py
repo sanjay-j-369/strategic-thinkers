@@ -49,9 +49,12 @@ async def list_workers(request: Request):
         row = rows_by_key.get(item.key)
         status = row.status.value if row else WorkerStatus.AVAILABLE.value
         config = {**item.default_config, **((row.config or {}) if row else {})}
-        live_status = "Paused" if status == WorkerStatus.PAUSED.value else "Sleeping"
-        if item.key in active_worker_keys and status == WorkerStatus.HIRED.value:
-            live_status = "Processing"
+        if status == WorkerStatus.PAUSED.value:
+            live_status = "Paused"
+        elif status == WorkerStatus.HIRED.value:
+            live_status = "Processing" if item.key in active_worker_keys else "Active"
+        else:
+            live_status = "Sleeping"
         items.append(
             {
                 "id": item.key,
@@ -112,7 +115,7 @@ async def hire_worker(worker_key: str, request: Request):
         "status": row.status.value,
         "config": row.config,
         "security_mode": "vault",
-        "live_status": "Sleeping",
+        "live_status": "Active",
         "updated_at": row.updated_at.isoformat(),
     }
 
@@ -149,6 +152,6 @@ async def update_worker_config(worker_key: str, body: WorkerConfigUpdate, reques
         "status": row.status.value,
         "config": row.config,
         "security_mode": "vault",
-        "live_status": "Sleeping",
+        "live_status": "Active",
         "updated_at": row.updated_at.isoformat(),
     }
