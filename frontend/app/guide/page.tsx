@@ -175,6 +175,8 @@ export default function GuidePage() {
                   title="Board Member"
                   subtitle="Ask anything about your startup strategy"
                   placeholder="What's our biggest growth opportunity right now?"
+                  storageKey={`mentor-chat:${user?.id || "workspace"}`}
+                  quickPrompts={["Give me the latest update", "Generate a board-ready report"]}
                 />
               </TabsContent>
             </CardContent>

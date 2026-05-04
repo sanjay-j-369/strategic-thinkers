@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Bot, FileText, MessageSquare, Radar, Settings, UserPlus, Users } from "lucide-react";
+import { Bot, MessageSquare, Radar, Settings, UserPlus, Users } from "lucide-react";
 
 import { MentorChat } from "@/components/MentorChat";
 import { WorkerConfigDrawer, type WorkerItem } from "@/components/WorkerConfigDrawer";
@@ -62,6 +62,14 @@ Focus on:
 - Risk mitigation strategies
 
 Keep founders out of legal trouble while enabling velocity.`,
+};
+
+const WORKER_CONTEXT_TAGS: Record<string, string[]> = {
+  "gtm-agent": ["customer", "support", "gtm", "slack", "email", "revenue"],
+  "hiring-agent": ["recruiting", "hr", "hiring", "candidates", "interviews"],
+  "finance-agent": ["finance", "burn-rate", "runway", "budget", "metrics"],
+  "product-agent": ["product", "feedback", "users", "features", "roadmap"],
+  "compliance-agent": ["legal", "compliance", "contracts", "nda", "regulatory"],
 };
 
 export function WorkerDirectory() {
@@ -284,14 +292,6 @@ export function WorkerDirectory() {
                                 Chat
                               </Button>
                             </div>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => handleWorkerAction(worker, "configure")}
-                            >
-                              <FileText className="h-4 w-4 mr-1" />
-                              Ask for Report
-                            </Button>
                           </>
                         ) : (
                           <Button
@@ -424,6 +424,13 @@ export function WorkerDirectory() {
                         subtitle={`Chat with your ${chatWorker.name.toLowerCase()}`}
                         placeholder={`Ask about ${chatWorker.name.toLowerCase()} topics...`}
                         systemPrompt={WORKER_SYSTEM_PROMPTS[chatWorker.worker_key]}
+                        workerKey={chatWorker.worker_key}
+                        contextTags={WORKER_CONTEXT_TAGS[chatWorker.worker_key] || []}
+                        storageKey={`worker-chat:${user?.id || "workspace"}:${chatWorker.worker_key}`}
+                        quickPrompts={[
+                          "Give me the latest update",
+                          "Generate a report I can download",
+                        ]}
                         compact
                       />
                     </div>

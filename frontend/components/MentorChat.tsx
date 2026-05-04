@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Bot, Send, Square, User } from "lucide-react";
+import { Bot, Download, Send, Square, User } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,10 @@ interface MentorChatProps {
   placeholder?: string;
   systemPrompt?: string;
   compact?: boolean;
+  storageKey?: string;
+  quickPrompts?: string[];
+  workerKey?: string;
+  contextTags?: string[];
 }
 
 export function MentorChat({
@@ -33,12 +37,169 @@ export function MentorChat({
   placeholder = "What should I prioritize this quarter?",
   systemPrompt,
   compact = false,
+  storageKey,
+  quickPrompts = [],
+  workerKey,
+  contextTags = [],
 }: MentorChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const resolvedStorageKey = useMemo(
+    () => storageKey || `mentor-chat:${title}`,
+    [storageKey, title]
+  );
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(resolvedStorageKey);
+      if (saved) {
+        setMessages(JSON.parse(saved) as ChatMessage[]);
+      }
+    } catch {
+      setMessages([]);
+    }
+  }, [resolvedStorageKey]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(resolvedStorageKey, JSON.stringify(messages));
+    } catch {
+      // Ignore local persistence failures.
+    }
+  }, [messages, resolvedStorageKey]);
+
+  function downloadBlob(filename: string, blob: Blob) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadMarkdown(filename: string, content: string) {
+    const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+    downloadBlob(filename, blob);
+  }
+
+  function reportFilename(extension: "md" | "pdf") {
+    return `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-report.${extension}`;
+  }
+
+  function plainReportText(content: string) {
+    return content
+      .replace(/<\/?pdf>/gi, "")
+      .replace(/\*\*(.*?)\*\*/g, "$1")
+      .replace(/^#{1,6}\s+/gm, "")
+      .replace(/^\s*[-*]\s+/gm, "- ")
+      .trim();
+  }
+
+  function escapePdfText(value: string) {
+    return value
+      .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "")
+      .replace(/\\/g, "\\\\")
+      .replace(/\(/g, "\\(")
+      .replace(/\)/g, "\\)");
+  }
+
+  function wrapPdfText(text: string, maxChars = 92) {
+    const lines: string[] = [];
+    text.split(/\r?\n/).forEach((paragraph) => {
+      const words = paragraph.trim().split(/\s+/).filter(Boolean);
+      if (words.length === 0) {
+        lines.push("");
+        return;
+      }
+
+      let current = "";
+      words.forEach((word) => {
+        if (!current) {
+          current = word;
+          return;
+        }
+        if (`${current} ${word}`.length > maxChars) {
+          lines.push(current);
+          current = word;
+        } else {
+          current = `${current} ${word}`;
+        }
+      });
+      if (current) lines.push(current);
+    });
+    return lines;
+  }
+
+  function buildPdfBlob(content: string) {
+    const lines = wrapPdfText(plainReportText(content));
+    const linesPerPage = 46;
+    const pages: string[][] = [];
+    for (let index = 0; index < lines.length; index += linesPerPage) {
+      pages.push(lines.slice(index, index + linesPerPage));
+    }
+    if (pages.length === 0) pages.push([""]);
+
+    const objects: string[] = [];
+    objects.push("<< /Type /Catalog /Pages 2 0 R >>");
+    const kids = pages.map((_, index) => `${3 + index * 2} 0 R`).join(" ");
+    objects.push(`<< /Type /Pages /Kids [${kids}] /Count ${pages.length} >>`);
+
+    pages.forEach((pageLines, pageIndex) => {
+      const pageObjectNumber = 3 + pageIndex * 2;
+      const contentObjectNumber = pageObjectNumber + 1;
+      objects.push(
+        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${3 + pages.length * 2} 0 R >> >> /Contents ${contentObjectNumber} 0 R >>`
+      );
+      const streamLines = [
+        "BT",
+        "/F1 11 Tf",
+        "50 742 Td",
+        "14 TL",
+        ...pageLines.map((line, index) => `${index === 0 ? "" : "T* "}${`(${escapePdfText(line)}) Tj`}`),
+        "ET",
+      ];
+      const stream = streamLines.join("\n");
+      objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+    });
+
+    objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+
+    let pdf = "%PDF-1.4\n";
+    const offsets = [0];
+    objects.forEach((object, index) => {
+      offsets.push(pdf.length);
+      pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+    });
+    const xrefOffset = pdf.length;
+    pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+    offsets.slice(1).forEach((offset) => {
+      pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+    });
+    pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+
+    return new Blob([pdf], { type: "application/pdf" });
+  }
+
+  function downloadTranscript() {
+    const content = messages
+      .map((message) => `## ${message.role === "user" ? "User" : title}\n\n${message.content}`)
+      .join("\n\n");
+    downloadMarkdown(`${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-history.md`, content);
+  }
+
+  function downloadLatestReport() {
+    const latest = [...messages].reverse().find((message) => message.role === "assistant");
+    if (!latest) return;
+    downloadBlob(reportFilename("pdf"), buildPdfBlob(latest.content));
+  }
+
+  function lastUserAskedForPdf() {
+    const latestUser = [...messages].reverse().find((message) => message.role === "user");
+    return Boolean(latestUser?.content.match(/\b(pdf|downloadable report|download as pdf)\b/i));
+  }
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -54,12 +215,24 @@ export function MentorChat({
 
       try {
         const history = messages.map((m) => ({ role: m.role, content: m.content }));
-        const body: { message: string; history: typeof history; systemPrompt?: string } = {
+        const body: {
+          message: string;
+          history: typeof history;
+          systemPrompt?: string;
+          workerKey?: string;
+          contextTags?: string[];
+        } = {
           message: trimmed,
           history,
         };
         if (systemPrompt) {
           body.systemPrompt = systemPrompt;
+        }
+        if (workerKey) {
+          body.workerKey = workerKey;
+        }
+        if (contextTags.length > 0) {
+          body.contextTags = contextTags;
         }
 
         const data = await apiFetch<{ reply: string }>("/api/chat", {
@@ -74,6 +247,11 @@ export function MentorChat({
           timestamp: new Date().toISOString(),
         };
         setMessages((prev) => [...prev, assistantMessage]);
+        if (trimmed.match(/\b(pdf|downloadable report|download as pdf)\b/i)) {
+          setTimeout(() => {
+            downloadBlob(reportFilename("pdf"), buildPdfBlob(assistantMessage.content));
+          }, 100);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to get response");
       } finally {
@@ -81,7 +259,7 @@ export function MentorChat({
         setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
       }
     },
-    [input, loading, messages, token, systemPrompt]
+    [contextTags, input, loading, messages, systemPrompt, token, workerKey]
   );
 
   return (
@@ -164,6 +342,22 @@ export function MentorChat({
         </div>
 
         <form onSubmit={handleSubmit} className={`border-t border-border p-4 space-y-3 shrink-0 ${compact ? "bg-card" : ""}`}>
+          {quickPrompts.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {quickPrompts.map((prompt) => (
+                <Button
+                  key={prompt}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="text-xs"
+                  onClick={() => setInput(prompt)}
+                >
+                  {prompt}
+                </Button>
+              ))}
+            </div>
+          ) : null}
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -179,6 +373,18 @@ export function MentorChat({
           <div className="flex items-center justify-between">
             <p className="text-xs text-foreground/50">Press Enter to send, Shift+Enter for new line</p>
             <div className="flex gap-2">
+              {messages.some((message) => message.role === "assistant") ? (
+                <Button type="button" variant="outline" size="sm" onClick={downloadLatestReport}>
+                  <Download className="h-4 w-4" />
+                  {lastUserAskedForPdf() ? "PDF" : "Report PDF"}
+                </Button>
+              ) : null}
+              {messages.length > 0 ? (
+                <Button type="button" variant="outline" size="sm" onClick={downloadTranscript}>
+                  <Download className="h-4 w-4" />
+                  History
+                </Button>
+              ) : null}
               {messages.length > 0 && (
                 <Button
                   type="button"

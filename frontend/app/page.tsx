@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   AlarmClock,
   ArrowRight,
@@ -91,10 +93,12 @@ interface AdminLogEvent {
 
 interface ActionItem {
   id: string;
+  entityId: string;
   kind: "signal" | "promise" | "draft";
   label: string;
   title: string;
   summary: string;
+  detail: string;
   source: string;
   href: string;
   created_at?: string;
@@ -113,6 +117,39 @@ function compactText(value?: string, maxLength = 240) {
   return `${text.slice(0, maxLength - 3).trim()}...`;
 }
 
+function markdownDetail(value?: string) {
+  return (value || "")
+    .replace(/Vault mode is active\..*$/is, "")
+    .replace(/:\s+\*\s+/g, ":\n\n* ")
+    .replace(/\s+\*\s+/g, "\n* ")
+    .replace(/\s+(\d+\.\s+)/g, "\n$1")
+    .trim();
+}
+
+function commitmentParts(text?: string) {
+  const raw = (text || "").trim();
+  const flattened = raw.replace(/\s+/g, " ");
+  const match = flattened.match(/^Subject:\s*(.*?)\s+From:\s*([^>]+>)(.*)$/i);
+  if (!match) {
+    return {
+      title: promiseTitle(raw),
+      detail: markdownDetail(raw),
+      summary: compactText(raw),
+    };
+  }
+
+  const [, subject, from, body] = match;
+  const detail = [`**From:** ${from.trim()}`, "", markdownDetail(body.trim())]
+    .filter(Boolean)
+    .join("\n");
+
+  return {
+    title: subject.trim(),
+    detail,
+    summary: compactText(body.trim() || raw),
+  };
+}
+
 function normalizeActionKey(value?: string) {
   return (value || "")
     .toLowerCase()
@@ -129,6 +166,15 @@ function signalTypeLabel(type?: string) {
 
 function signalTitle(title?: string) {
   return (title || "Untitled signal").replace("surfaced GTM actions", "surfaced actions");
+}
+
+function promiseTitle(text?: string) {
+  const cleaned = compactText(text, 180);
+  const subject = cleaned.match(/Subject:\s*([^<\n]+?)(?:\s+From:|$)/i)?.[1]?.trim();
+  if (subject) return subject;
+
+  const firstSentence = cleaned.split(/[.!?]\s+/)[0]?.trim();
+  return compactText(firstSentence || cleaned || "Open promise", 100);
 }
 
 function actionTimestamp(value?: string) {
@@ -173,6 +219,8 @@ export default function FeedPage() {
   const [socketState, setSocketState] = useState<"connecting" | "open" | "closed">("closed");
   const [systemTrayOpen, setSystemTrayOpen] = useState(false);
   const [expandedActionId, setExpandedActionId] = useState<string | null>(null);
+  const [completedActionIds, setCompletedActionIds] = useState<Set<string>>(new Set());
+  const [expandedPromiseId, setExpandedPromiseId] = useState<string | null>(null);
   const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
   const logsViewportRef = useRef<HTMLDivElement | null>(null);
 
@@ -356,10 +404,12 @@ export default function FeedPage() {
       const existing = groups.get(key);
       const next: ActionItem = {
         id: `signal-${key || signal.id || createdAt}`,
+        entityId: signal.id || "",
         kind: "signal",
         label: signalTypeLabel(signal.notification_type || signal.type),
         title: signalTitle(signal.title),
         summary: compactText(signal.body),
+        detail: markdownDetail(signal.body),
         source: signal.agent_name || "Founder OS",
         href: "#signals",
         created_at: createdAt,
@@ -383,29 +433,38 @@ export default function FeedPage() {
   const actionItems = useMemo<ActionItem[]>(() => {
     const draftActions = visibleDrafts.slice(0, 2).map((draft) => ({
       id: `draft-${draft.id}`,
+      entityId: draft.id,
       kind: "draft" as const,
       label: "Draft",
       title: draft.prompt || "Draft reply ready",
       summary: compactText(draft.draft_text),
+      detail: markdownDetail(draft.draft_text),
       source: "Draft Inbox",
       href: "#drafts",
       created_at: draft.created_at,
       unread: true,
     }));
-    const promiseActions = uniqueVisiblePromises.slice(0, 4).map((promise) => ({
-      id: `promise-${promise.id}`,
-      kind: "promise" as const,
-      label: "Promise",
-      title: compactText(promise.promise_text, 90),
-      summary: compactText(promise.promise_text),
-      source: "Open commitment",
-      href: "#promises",
-      created_at: promise.created_at,
-      unread: false,
-    }));
+    const promiseActions = uniqueVisiblePromises.slice(0, 4).map((promise) => {
+      const parts = commitmentParts(promise.promise_text);
+      return {
+        id: `promise-${promise.id}`,
+        entityId: promise.id,
+        kind: "promise" as const,
+        label: "Promise",
+        title: parts.title,
+        summary: parts.summary,
+        detail: parts.detail,
+        source: "Open commitment",
+        href: "#promises",
+        created_at: promise.created_at,
+        unread: false,
+      };
+    });
 
-    return [...draftActions, ...promiseActions, ...groupedSignalActions.slice(0, 6)].slice(0, 10);
-  }, [groupedSignalActions, uniqueVisiblePromises, visibleDrafts]);
+    return [...draftActions, ...promiseActions, ...groupedSignalActions.slice(0, 6)]
+      .filter((action) => !completedActionIds.has(action.id))
+      .slice(0, 10);
+  }, [completedActionIds, groupedSignalActions, uniqueVisiblePromises, visibleDrafts]);
   const dashboardMetrics = opsStatus
     ? [
         { label: "Tasks in Progress", value: opsStatus.queue.counts.pending, accent: "bg-primary text-on-primary" },
@@ -416,6 +475,49 @@ export default function FeedPage() {
     : [];
   const connectedSourceCount = Number(Boolean(user?.google_connected)) + Number(Boolean(user?.slack_connected));
   const attentionCount = actionItems.length;
+
+  async function markActionDone(action: ActionItem) {
+    setCompletedActionIds((current) => new Set(current).add(action.id));
+    setExpandedActionId(null);
+    if (!token) return;
+
+    try {
+      if (action.kind === "signal" && action.entityId) {
+        await apiFetch(`/api/ops/notifications/${action.entityId}/read`, {
+          method: "POST",
+          token,
+        });
+      }
+      if (action.kind === "promise") {
+        await apiFetch(`/api/ops/promises/${action.entityId}/complete`, {
+          method: "POST",
+          token,
+        });
+        setPromises((current) => current.filter((item) => item.id !== action.entityId));
+      }
+    } catch {
+      setCompletedActionIds((current) => {
+        const next = new Set(current);
+        next.delete(action.id);
+        return next;
+      });
+    }
+  }
+
+  async function markPromiseDone(promiseId: string) {
+    setExpandedPromiseId(null);
+    setPromises((current) => current.filter((item) => item.id !== promiseId));
+    if (!token) return;
+
+    try {
+      await apiFetch(`/api/ops/promises/${promiseId}/complete`, {
+        method: "POST",
+        token,
+      });
+    } catch {
+      void Promise.resolve();
+    }
+  }
 
   return (
     <div className="bento-full-grid gap-6 max-w-7xl mx-auto pt-24 pb-12">
@@ -539,17 +641,6 @@ export default function FeedPage() {
                           <span className="block text-sm font-semibold leading-6 text-on-surface">
                             {action.title}
                           </span>
-                          <span
-                            className="block text-sm leading-6 text-on-surface-variant"
-                            style={{
-                              display: "-webkit-box",
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: "vertical",
-                              overflow: "hidden",
-                            }}
-                          >
-                            {action.summary}
-                          </span>
                         </span>
                         <ChevronDown
                           className={`h-4 w-4 shrink-0 text-on-surface-variant transition-transform ${
@@ -559,10 +650,26 @@ export default function FeedPage() {
                       </button>
                       {isExpanded ? (
                         <div className="border-t border-outline/20 bg-surface-high px-4 py-4 text-sm leading-6 text-on-surface-variant sm:px-16">
-                          <p className="text-left">{action.summary}</p>
-                          <Button asChild size="sm" variant="outline" className="mt-3 text-xs">
-                            <Link href={action.href}>Open section</Link>
-                          </Button>
+                          <div className="prose prose-sm max-w-none text-left text-on-surface-variant dark:prose-invert [&_p]:my-2 [&_ul]:my-2 [&_ol]:my-2 [&_li]:my-1 [&_strong]:text-on-surface">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {action.detail || action.summary}
+                            </ReactMarkdown>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <Button asChild size="sm" variant="outline" className="text-xs">
+                              <Link href={action.href}>Open section</Link>
+                            </Button>
+                            {action.kind !== "draft" ? (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                className="text-xs"
+                                onClick={() => void markActionDone(action)}
+                              >
+                                Mark done
+                              </Button>
+                            ) : null}
+                          </div>
                         </div>
                       ) : null}
                     </motion.div>
@@ -652,20 +759,47 @@ export default function FeedPage() {
               <div className="space-y-2">
                 {uniqueVisiblePromises.slice(0, 4).map((item) => (
                   <div key={item.id} className="promise-item">
-                    <p
-                      className="text-sm leading-6 text-on-surface"
-                      style={{
-                        display: "-webkit-box",
-                        WebkitLineClamp: 3,
-                        WebkitBoxOrient: "vertical",
-                        overflow: "hidden",
-                      }}
+                    {(() => {
+                      const parts = commitmentParts(item.promise_text);
+                      return (
+                        <>
+                    <button
+                      type="button"
+                      className="flex w-full items-start justify-between gap-3 text-left"
+                      onClick={() => setExpandedPromiseId(expandedPromiseId === item.id ? null : item.id)}
                     >
-                      {item.promise_text}
-                    </p>
+                      <span className="text-sm font-semibold leading-6 text-on-surface">
+                        {parts.title}
+                      </span>
+                      <ChevronDown
+                        className={`mt-1 h-4 w-4 shrink-0 text-on-surface-variant transition-transform ${
+                          expandedPromiseId === item.id ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
                     <p className="text-xs text-on-surface-variant mt-1">
                       {new Date(item.created_at).toLocaleDateString()}
                     </p>
+                    {expandedPromiseId === item.id ? (
+                      <div className="mt-3 border-t border-outline/20 pt-3">
+                        <div className="prose prose-sm max-w-none text-on-surface-variant dark:prose-invert [&_p]:my-2 [&_ol]:my-2 [&_li]:my-1 [&_strong]:text-on-surface">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {parts.detail}
+                          </ReactMarkdown>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="mt-3 text-xs"
+                          onClick={() => void markPromiseDone(item.id)}
+                        >
+                          Mark done
+                        </Button>
+                      </div>
+                    ) : null}
+                        </>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>

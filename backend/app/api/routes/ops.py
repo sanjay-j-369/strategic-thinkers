@@ -147,6 +147,37 @@ async def list_promises(
     }
 
 
+@router.post("/promises/{promise_id}/complete")
+async def complete_promise(
+    promise_id: str,
+    request: Request,
+):
+    user = await require_current_user(request)
+    try:
+        parsed_promise_id = uuid.UUID(promise_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid promise id") from exc
+
+    async_session = request.app.state.async_session
+    async with async_session() as session:
+        row = (
+            await session.execute(
+                select(PromiseItem).where(
+                    PromiseItem.id == parsed_promise_id,
+                    PromiseItem.user_id == user.id,
+                )
+            )
+        ).scalar_one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail="Promise not found")
+
+        row.status = "DONE"
+        row.completed_at = datetime.now(timezone.utc)
+        await session.commit()
+
+    return {"status": "done", "id": promise_id}
+
+
 @router.get("/drafts")
 async def list_drafts(
     request: Request,
