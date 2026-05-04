@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import re
 from typing import TypedDict
 
 from app.agentic.context import query_memory_by_tags
 from app.agentic.llm import complete_text
+
+FROM_EMAIL_PATTERN = re.compile(r"From:\s*([^<\n]+?)\s*<([^>\s]+@[^>\s]+)>", re.IGNORECASE)
+EMAIL_PATTERN = re.compile(r"\b([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})\b", re.IGNORECASE)
 
 
 class WorkerState(TypedDict):
@@ -76,13 +80,13 @@ def compose_operator_alert(state: WorkerState) -> WorkerState:
         return {**state, "notification": None}
 
     security_mode = "vault"
-    title = f"{state['worker_name']} surfaced GTM actions"
+    title = f"{state['worker_name']} surfaced actions"
     body = state.get("blocker_summary", "").strip()
     body = (
         f"{body}\n\nVault mode is active. Founder OS will save a local draft "
         "until the founder opens the app and explicitly sends it."
     )
-    notification_type = "GTM_SKELETON_DRAFT"
+    notification_type = "WORKER_FOLLOW_UP"
     notification = {
         "notification_type": notification_type,
         "severity": "warning",
@@ -98,10 +102,45 @@ def compose_operator_alert(state: WorkerState) -> WorkerState:
             "context_count": len(state.get("context_items", [])),
         },
     }
+    first_context_item = (state.get("context_items") or [{}])[0]
+    recipient, recipient_context = _recipient_from_context_items(state.get("context_items") or [])
+    context_item_for_draft = recipient_context or first_context_item
+    context_payload = {
+        **notification["payload"],
+        "draft_type": "WORKER_FOLLOW_UP",
+        "source": context_item_for_draft.get("source"),
+        "source_url": context_item_for_draft.get("source_url"),
+    }
+    if recipient.get("email"):
+        context_payload["to_email"] = recipient["email"]
+    if recipient.get("name"):
+        context_payload["recipient_hint"] = recipient["name"]
+
     draft_payload = {
+        "source_ref": context_item_for_draft.get("id"),
         "channel": "email",
-        "prompt": f"{state['worker_name']} GTM follow-up",
+        "prompt": f"{state['worker_name']} follow-up",
         "draft_text": body,
-        "context_payload": notification["payload"],
+        "context_payload": context_payload,
     }
     return {**state, "notification": notification, "draft_payload": draft_payload}
+
+
+def _recipient_from_context_items(context_items: list[dict]) -> tuple[dict[str, str], dict | None]:
+    for item in context_items:
+        text = item.get("text") or ""
+        from_match = FROM_EMAIL_PATTERN.search(text)
+        if from_match:
+            return (
+                {
+                    "name": from_match.group(1).strip(),
+                    "email": from_match.group(2).strip(),
+                },
+                item,
+            )
+
+        email_match = EMAIL_PATTERN.search(text)
+        if email_match:
+            return {"email": email_match.group(1).strip()}, item
+
+    return {}, None

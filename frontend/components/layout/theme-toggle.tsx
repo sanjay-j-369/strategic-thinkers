@@ -12,13 +12,13 @@ export function ThemeToggle() {
   return (
     <Button
       type="button"
-      size="sm"
+      size="icon"
       variant="secondary"
       onClick={toggleTheme}
       aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
+      title={`Switch to ${isDark ? "light" : "dark"} mode`}
     >
       {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-      {isDark ? "Light" : "Dark"}
     </Button>
   );
 }

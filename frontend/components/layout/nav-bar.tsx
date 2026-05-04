@@ -4,12 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
-  CalendarDays,
-  Inbox,
-  LayoutDashboard,
-  BriefcaseBusiness,
-  Shield,
-  Sparkles,
   CircleUser,
   Radar,
   ShieldCheck
@@ -127,16 +121,11 @@ function NavBar() {
       <div className="top-app-bar-content">
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-4 transition-opacity hover:opacity-80">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-container text-on-primary-container shadow-soft">
-              <Radar className="h-6 w-6" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-container text-on-primary-container shadow-soft">
+              <Radar className="h-5 w-5" />
             </div>
-            <div>
-              <div className="text-xl font-medium tracking-tight text-on-surface">
-                Founder OS
-              </div>
-              <div className="text-xs font-medium tracking-wide text-on-surface-variant">
-                Control Room
-              </div>
+            <div className="text-lg font-medium tracking-tight text-on-surface">
+              Founder OS
             </div>
           </Link>
         </div>

@@ -4,27 +4,21 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Activity,
   AlarmClock,
   ArrowRight,
   Bell,
-  BriefcaseBusiness,
   ChevronDown,
   ChevronUp,
   Inbox,
   Layers3,
   Lock,
   Server,
-  Sparkles,
-  Waves,
 } from "lucide-react";
 
-import { SignalCard, type SignalItem } from "@/components/SignalCard";
 import { DraftReviewer } from "@/components/DraftReviewer";
 import { useAuth } from "@/components/providers/auth-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
 import { extractPIITokens, replacePIITokens, resolvePIITokenValues } from "@/lib/pii";
 import { useFounderFeed } from "@/lib/websocket";
@@ -82,22 +76,6 @@ interface OpsStatus {
   }>;
 }
 
-interface WorkerItem {
-  id: string;
-  worker_key: string;
-  name: string;
-  description: string;
-  status: string;
-  config: {
-    monitor_targets?: string;
-    auto_draft_replies?: boolean;
-    custom_instructions?: string;
-  };
-  security_mode: "vault";
-  live_status: string;
-  updated_at?: string | null;
-}
-
 interface AdminLogEvent {
   type: string;
   log_id: string;
@@ -109,6 +87,58 @@ interface AdminLogEvent {
   node_name?: string | null;
   step?: string | null;
   message: string;
+}
+
+interface ActionItem {
+  id: string;
+  kind: "signal" | "promise" | "draft";
+  label: string;
+  title: string;
+  summary: string;
+  source: string;
+  href: string;
+  created_at?: string;
+  count?: number;
+  unread?: boolean;
+}
+
+function compactText(value?: string, maxLength = 240) {
+  const text = (value || "")
+    .replace(/\*\*/g, "")
+    .replace(/Vault mode is active\..*$/is, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 3).trim()}...`;
+}
+
+function normalizeActionKey(value?: string) {
+  return (value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function signalTypeLabel(type?: string) {
+  if (type === "GTM_SKELETON_DRAFT" || type === "WORKER_FOLLOW_UP") return "Worker follow-up";
+  if (type === "INGESTION_WATCH_UPDATE") return "Context update";
+  if (type === "GUIDE_QUERY") return "Mentor note";
+  return (type || "Signal").replace(/_/g, " ").toLowerCase();
+}
+
+function signalTitle(title?: string) {
+  return (title || "Untitled signal").replace("surfaced GTM actions", "surfaced actions");
+}
+
+function actionTimestamp(value?: string) {
+  if (!value) return "Just now";
+  return new Date(value).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function resolveWsBase(): string {
@@ -137,13 +167,12 @@ export default function FeedPage() {
   const signals = useFounderFeed(user?.id ?? "", token);
   const [promises, setPromises] = useState<PromiseItem[]>([]);
   const [drafts, setDrafts] = useState<DraftItem[]>([]);
-  const [snapshot, setSnapshot] = useState<any | null>(null);
   const [opsStatus, setOpsStatus] = useState<OpsStatus | null>(null);
-  const [workers, setWorkers] = useState<WorkerItem[]>([]);
   const [piiMap, setPiiMap] = useState<Record<string, string>>({});
   const [logs, setLogs] = useState<AdminLogEvent[]>([]);
   const [socketState, setSocketState] = useState<"connecting" | "open" | "closed">("closed");
   const [systemTrayOpen, setSystemTrayOpen] = useState(false);
+  const [expandedActionId, setExpandedActionId] = useState<string | null>(null);
   const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
   const logsViewportRef = useRef<HTMLDivElement | null>(null);
 
@@ -153,23 +182,20 @@ export default function FeedPage() {
 
     async function loadOps() {
       try {
-        const [promiseData, draftData, statusData, workerData] = await Promise.all([
+        const [promiseData, draftData, statusData] = await Promise.all([
           apiFetch<{ items: PromiseItem[] }>("/api/ops/promises?limit=6", { token }),
           apiFetch<{ items: DraftItem[] }>("/api/ops/drafts?limit=4", { token }),
           apiFetch<OpsStatus>("/api/ops/system-status", { token }),
-          apiFetch<{ items: WorkerItem[] }>("/api/workers", { token }),
         ]);
         if (!active) return;
         setPromises(promiseData.items || []);
         setDrafts(draftData.items || []);
         setOpsStatus(statusData);
-        setWorkers((workerData.items || []).filter((worker) => worker.status === "hired"));
       } catch {
         if (!active) return;
         setPromises([]);
         setDrafts([]);
         setOpsStatus(null);
-        setWorkers([]);
       }
     }
 
@@ -182,25 +208,6 @@ export default function FeedPage() {
       clearInterval(timer);
     };
   }, [token, isAuthenticated]);
-
-  useEffect(() => {
-    if (!demoMode || !token || !isAuthenticated) return;
-    let mounted = true;
-    async function loadSnapshot() {
-      try {
-        const data = await apiFetch<any>("/api/demo/snapshot", { token });
-        if (mounted) setSnapshot(data);
-      } catch {
-        if (mounted) setSnapshot(null);
-      }
-    }
-    void loadSnapshot();
-    const timer = setInterval(() => void loadSnapshot(), 8000);
-    return () => {
-      mounted = false;
-      clearInterval(timer);
-    };
-  }, [demoMode, token, isAuthenticated]);
 
   useEffect(() => {
     if (!demoMode || !isAuthenticated || !user?.id) return;
@@ -292,24 +299,9 @@ export default function FeedPage() {
     };
   }, [drafts, isAuthenticated, piiMap, privateKey, promises, signals, token]);
 
-  const metrics = useMemo(() => {
-    const unread = signals.filter((item) => !item.read_at).length;
-    const workerAlerts = signals.filter((item) => item.pillar === "WORKER").length;
-    const mentorAlerts = signals.filter(
-      (item) => item.pillar === "MENTOR" || item.notification_type === "GUIDE_QUERY"
-    ).length;
-    return [
-      { label: "Unread Signals", value: unread, icon: Bell, href: "#signals", detail: "Open feed" },
-      { label: "Open Promises", value: promises.length, icon: AlarmClock, href: "#promises", detail: "Review promises" },
-      { label: "Draft Replies", value: drafts.length, icon: Inbox, href: "#drafts", detail: "Review drafts" },
-      { label: "Worker Alerts", value: workerAlerts, icon: BriefcaseBusiness, href: "#worker-runtime", detail: "Open workers" },
-      { label: "Mentor Notes", value: mentorAlerts, icon: Sparkles, href: "#signals", detail: "Open mentor feed" },
-    ];
-  }, [drafts.length, promises.length, signals]);
-
-  const featured = useMemo(
+  const visibleSignals = useMemo(
     () =>
-      signals.slice(0, 8).map((signal) => ({
+      signals.map((signal) => ({
         ...signal,
         title: replacePIITokens(signal.title, piiMap),
         body: replacePIITokens(signal.body, piiMap),
@@ -333,6 +325,87 @@ export default function FeedPage() {
       })),
     [piiMap, promises]
   );
+  const uniqueVisiblePromises = useMemo(() => {
+    const seen = new Set<string>();
+    return visiblePromises.filter((item) => {
+      const key = normalizeActionKey(item.promise_text);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [visiblePromises]);
+  const visibleDrafts = useMemo(
+    () =>
+      drafts.map((item) => ({
+        ...item,
+        prompt: replacePIITokens(item.prompt, piiMap),
+        draft_text: replacePIITokens(item.draft_text, piiMap),
+      })),
+    [drafts, piiMap]
+  );
+  const groupedSignalActions = useMemo(() => {
+    const groups = new Map<string, ActionItem>();
+    visibleSignals.forEach((signal) => {
+      const key = [
+        signal.pillar || "SYSTEM",
+        signal.agent_name || "Founder OS",
+        signal.notification_type || signal.type || "SIGNAL",
+        signalTitle(signal.title),
+      ].map(normalizeActionKey).join(":");
+      const createdAt = signal.created_at || signal.generated_at;
+      const existing = groups.get(key);
+      const next: ActionItem = {
+        id: `signal-${key || signal.id || createdAt}`,
+        kind: "signal",
+        label: signalTypeLabel(signal.notification_type || signal.type),
+        title: signalTitle(signal.title),
+        summary: compactText(signal.body),
+        source: signal.agent_name || "Founder OS",
+        href: "#signals",
+        created_at: createdAt,
+        count: (existing?.count || 0) + 1,
+        unread: !signal.read_at || Boolean(existing?.unread),
+      };
+      if (
+        !existing ||
+        new Date(createdAt || 0).getTime() > new Date(existing.created_at || 0).getTime()
+      ) {
+        groups.set(key, next);
+      } else {
+        groups.set(key, { ...existing, count: next.count, unread: next.unread });
+      }
+    });
+
+    return Array.from(groups.values()).sort(
+      (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+    );
+  }, [visibleSignals]);
+  const actionItems = useMemo<ActionItem[]>(() => {
+    const draftActions = visibleDrafts.slice(0, 2).map((draft) => ({
+      id: `draft-${draft.id}`,
+      kind: "draft" as const,
+      label: "Draft",
+      title: draft.prompt || "Draft reply ready",
+      summary: compactText(draft.draft_text),
+      source: "Draft Inbox",
+      href: "#drafts",
+      created_at: draft.created_at,
+      unread: true,
+    }));
+    const promiseActions = uniqueVisiblePromises.slice(0, 4).map((promise) => ({
+      id: `promise-${promise.id}`,
+      kind: "promise" as const,
+      label: "Promise",
+      title: compactText(promise.promise_text, 90),
+      summary: compactText(promise.promise_text),
+      source: "Open commitment",
+      href: "#promises",
+      created_at: promise.created_at,
+      unread: false,
+    }));
+
+    return [...draftActions, ...promiseActions, ...groupedSignalActions.slice(0, 6)].slice(0, 10);
+  }, [groupedSignalActions, uniqueVisiblePromises, visibleDrafts]);
   const dashboardMetrics = opsStatus
     ? [
         { label: "Tasks in Progress", value: opsStatus.queue.counts.pending, accent: "bg-primary text-on-primary" },
@@ -341,8 +414,8 @@ export default function FeedPage() {
         { label: "Live Sync Status", value: opsStatus.websocket.user_connections, accent: "bg-primary text-on-primary" },
       ]
     : [];
-  const hiredWorkers = workers;
   const connectedSourceCount = Number(Boolean(user?.google_connected)) + Number(Boolean(user?.slack_connected));
+  const attentionCount = actionItems.length;
 
   return (
     <div className="bento-full-grid gap-6 max-w-7xl mx-auto pt-24 pb-12">
@@ -360,14 +433,14 @@ export default function FeedPage() {
             Overview
           </h1>
           <p className="bento-hero-description">
-            {drafts.length + promises.length} tasks require your attention. Your workers are active and monitoring your sources.
+            {attentionCount} action{attentionCount === 1 ? "" : "s"} need review. Worker updates are grouped so the home page stays focused.
           </p>
           <div className="flex flex-wrap gap-4 mt-6">
             {isAuthenticated ? (
               <>
                 <Button asChild size="lg" className="bg-primary text-on-primary hover:bg-primary/90">
-                  <Link href="#drafts">
-                    Review Drafts
+                  <Link href={visibleDrafts.length > 0 ? "#drafts" : "#signals"}>
+                    {visibleDrafts.length > 0 ? "Review Drafts" : "Review Actions"}
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>
@@ -399,39 +472,24 @@ export default function FeedPage() {
             </div>
             <div className="bento-stat-item">
               <span className="bento-stat-label">Promises</span>
-              <span className="bento-stat-value">{promises.length}</span>
+              <span className="bento-stat-value">{uniqueVisiblePromises.length}</span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Pulse Tiles - 3 equal square tiles - Cols 1-8 */}
-      <section className="bento-pulse-row" id="signals">
-        {metrics.slice(0, 3).map((metric) => {
-          const Icon = metric.icon;
-          return (
-            <div key={metric.label} className="bento-pulse-tile">
-              <Icon className="h-8 w-8 text-primary bento-pulse-icon" />
-              <p className="bento-pulse-label">{metric.label}</p>
-              <p className="bento-pulse-value">{metric.value}</p>
-            </div>
-          );
-        })}
-      </section>
-
       {/* Main Content - Cols 1-8 */}
       <div className="bento-main">
-        {/* Signals Card */}
         <div className="bento-card" id="signals">
           <div className="bento-card-header">
             <div>
-              <p className="bento-label">Live feed</p>
+              <p className="bento-label">Action list</p>
               <h2 className="bento-title">
-                <Waves className="h-5 w-5 text-primary" />
-                Actionable Signals
+                <Bell className="h-5 w-5 text-primary" />
+                What Needs Attention
               </h2>
             </div>
-            <Badge variant="outline">{featured.length} visible</Badge>
+            <Badge variant="outline">{actionItems.length} open</Badge>
           </div>
           <div className="bento-card-content">
             {loading ? (
@@ -443,45 +501,95 @@ export default function FeedPage() {
                 <Layers3 className="h-8 w-8 text-on-surface-variant mx-auto" />
                 <p className="text-sm text-on-surface-variant mt-2">Sign in to see live signals</p>
               </div>
-            ) : featured.length === 0 ? (
+            ) : actionItems.length === 0 ? (
               <div className="bento-empty">
                 <Bell className="h-8 w-8 text-on-surface-variant mx-auto" />
-                <p className="text-sm text-on-surface-variant mt-2">Waiting for the first signal</p>
-                <p className="text-xs text-on-surface-variant/60 mt-1">Connect sources to start receiving alerts</p>
+                <p className="text-sm text-on-surface-variant mt-2">No open actions</p>
+                <p className="text-xs text-on-surface-variant/60 mt-1">New promises, drafts, and worker alerts will appear here.</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {featured.map((signal, index) => (
-                  <motion.div
-                    key={signal.id || `${signal.notification_type}-${signal.created_at}-${index}`}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.2, delay: index * 0.03 }}
-                  >
-                    <SignalCard signal={signal as SignalItem} />
-                  </motion.div>
-                ))}
+              <div className="overflow-hidden rounded-[16px] border border-outline/20 divide-y divide-outline/20">
+                {actionItems.map((action, index) => {
+                  const Icon = action.kind === "draft" ? Inbox : action.kind === "promise" ? AlarmClock : Bell;
+                  const isExpanded = expandedActionId === action.id;
+                  return (
+                    <motion.div
+                      key={action.id}
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2, delay: index * 0.03 }}
+                    >
+                      <button
+                        className="grid w-full grid-cols-[2.5rem_minmax(0,1fr)_1.25rem] items-start gap-4 bg-transparent px-4 py-4 text-left transition-colors hover:bg-surface-high focus-visible:bg-surface-high focus-visible:outline-none"
+                        onClick={() => setExpandedActionId(isExpanded ? null : action.id)}
+                      >
+                        <span className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-surface-high text-primary">
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <span className="flex min-w-0 flex-col gap-1">
+                          <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-medium uppercase tracking-wider text-on-surface-variant">
+                            <span className="whitespace-nowrap">{action.label}</span>
+                            <span className="whitespace-nowrap">{action.source}</span>
+                            <span className="whitespace-nowrap">{actionTimestamp(action.created_at)}</span>
+                            {action.count && action.count > 1 ? (
+                              <Badge variant="outline">{action.count} updates</Badge>
+                            ) : null}
+                            {action.unread ? <Badge variant="secondary">new</Badge> : null}
+                          </span>
+                          <span className="block text-sm font-semibold leading-6 text-on-surface">
+                            {action.title}
+                          </span>
+                          <span
+                            className="block text-sm leading-6 text-on-surface-variant"
+                            style={{
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                            }}
+                          >
+                            {action.summary}
+                          </span>
+                        </span>
+                        <ChevronDown
+                          className={`h-4 w-4 shrink-0 text-on-surface-variant transition-transform ${
+                            isExpanded ? "rotate-180" : ""
+                          }`}
+                        />
+                      </button>
+                      {isExpanded ? (
+                        <div className="border-t border-outline/20 bg-surface-high px-4 py-4 text-sm leading-6 text-on-surface-variant sm:px-16">
+                          <p className="text-left">{action.summary}</p>
+                          <Button asChild size="sm" variant="outline" className="mt-3 text-xs">
+                            <Link href={action.href}>Open section</Link>
+                          </Button>
+                        </div>
+                      ) : null}
+                    </motion.div>
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
 
-        {/* Drafts Card */}
-        <div className="bento-card" id="drafts">
-          <div className="bento-card-header">
-            <div>
-              <p className="bento-label">Pending review</p>
-              <h2 className="bento-title">
-                <Inbox className="h-5 w-5 text-primary" />
-                Draft Replies
-              </h2>
+        {visibleDrafts.length > 0 ? (
+          <div className="bento-card" id="drafts">
+            <div className="bento-card-header">
+              <div>
+                <p className="bento-label">Pending review</p>
+                <h2 className="bento-title">
+                  <Inbox className="h-5 w-5 text-primary" />
+                  Draft Replies
+                </h2>
+              </div>
+              <Badge variant="outline">{visibleDrafts.length}</Badge>
             </div>
-            <Badge variant="outline">{drafts.length}</Badge>
+            <div className="bento-card-content">
+              <DraftReviewer />
+            </div>
           </div>
-          <div className="bento-card-content">
-            <DraftReviewer />
-          </div>
-        </div>
+        ) : null}
       </div>
 
       {/* Sidebar - Cols 9-12 */}
@@ -542,9 +650,19 @@ export default function FeedPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {visiblePromises.slice(0, 5).map((item) => (
+                {uniqueVisiblePromises.slice(0, 4).map((item) => (
                   <div key={item.id} className="promise-item">
-                    <p className="text-sm text-on-surface">{item.promise_text}</p>
+                    <p
+                      className="text-sm leading-6 text-on-surface"
+                      style={{
+                        display: "-webkit-box",
+                        WebkitLineClamp: 3,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {item.promise_text}
+                    </p>
                     <p className="text-xs text-on-surface-variant mt-1">
                       {new Date(item.created_at).toLocaleDateString()}
                     </p>

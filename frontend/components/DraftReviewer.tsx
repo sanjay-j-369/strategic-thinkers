@@ -43,6 +43,17 @@ interface LocalDraft {
   };
 }
 
+const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
+
+function recipientEmailForDraft(draft: LocalDraft) {
+  const explicitRecipient = draft.context_payload?.to_email?.trim();
+  if (explicitRecipient) return explicitRecipient;
+
+  const hint = draft.context_payload?.recipient_hint?.trim() || "";
+  const hintedEmail = hint.match(EMAIL_PATTERN)?.[0];
+  return hintedEmail || "";
+}
+
 export function DraftReviewer() {
   const { token, user, privateKey } = useAuth();
   const [drafts, setDrafts] = useState<Draft[]>([]);
@@ -58,7 +69,6 @@ export function DraftReviewer() {
   const [isSending, setIsSending] = useState(false);
   const [isDiscarding, setIsDiscarding] = useState(false);
   const [piiMap, setPiiMap] = useState<Record<string, string>>({});
-  const [autoOpened, setAutoOpened] = useState(false);
 
   const fetchDrafts = useCallback(async () => {
     if (!token) return;
@@ -177,37 +187,10 @@ export function DraftReviewer() {
   const openLocalDraft = useCallback((draft: LocalDraft) => {
     setSelectedDraft(null);
     setSelectedLocalDraft(draft);
-    setEditTo(draft.context_payload?.to_email || draft.context_payload?.recipient_hint || "");
+    setEditTo(recipientEmailForDraft(draft));
     setEditSubject(draft.prompt || "Draft reply");
     setEditBody(draft.draft_text);
   }, []);
-
-  useEffect(() => {
-    if (loading || autoOpened || error) return;
-    if (selectedDraft || selectedLocalDraft) return;
-
-    const firstLocal = visibleRoutingDrafts[0] || visibleBackendDrafts[0];
-    if (firstLocal) {
-      openLocalDraft(firstLocal);
-      setAutoOpened(true);
-      return;
-    }
-    if (drafts[0]) {
-      openGmailDraft(drafts[0]);
-      setAutoOpened(true);
-    }
-  }, [
-    autoOpened,
-    drafts,
-    error,
-    loading,
-    openGmailDraft,
-    openLocalDraft,
-    selectedDraft,
-    selectedLocalDraft,
-    visibleBackendDrafts,
-    visibleRoutingDrafts,
-  ]);
 
   async function handleSendGmailDraft() {
     if (!selectedDraft || !token) return;
@@ -306,7 +289,7 @@ export function DraftReviewer() {
         <div className="space-y-1">
           <CardTitle className="font-bold tracking-tighter">Draft Replies</CardTitle>
           <CardDescription>
-            Pending drafts appear automatically when you open the workspace. Send them, bin them, or leave them for later.
+            Pending drafts are held for review. Open one, send it, bin it, or leave it for later.
           </CardDescription>
         </div>
         <div className="flex items-center gap-2">
@@ -348,26 +331,32 @@ export function DraftReviewer() {
 
         {visibleBackendDrafts.length > 0 ? (
           <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-            {visibleBackendDrafts.map((draft) => (
-              <div key={draft.id} className="border border-border px-4 py-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">
-                      {draft.context_payload?.agent_name || "Assistant"}
-                    </p>
-                    <p className="mt-2 text-sm font-semibold tracking-tight text-foreground">
-                      {draft.prompt || "Draft reply"}
-                    </p>
-                    <p className="mt-3 text-sm leading-7 text-foreground whitespace-pre-line">
-                      {draft.draft_text}
-                    </p>
+            {visibleBackendDrafts.map((draft) => {
+              const recipient = recipientEmailForDraft(draft);
+              return (
+                <div key={draft.id} className="border border-border px-4 py-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">
+                        {draft.context_payload?.agent_name || "Assistant"}
+                      </p>
+                      <p className="mt-2 text-sm font-semibold tracking-tight text-foreground">
+                        {draft.prompt || "Draft reply"}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {recipient ? `To: ${recipient}` : "Recipient needs review"}
+                      </p>
+                      <p className="mt-3 text-sm leading-7 text-foreground whitespace-pre-line">
+                        {draft.draft_text}
+                      </p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => openLocalDraft(draft)}>
+                      Review
+                    </Button>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => openLocalDraft(draft)}>
-                    Review
-                  </Button>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : null}
 
@@ -410,12 +399,21 @@ export function DraftReviewer() {
             <DialogHeader className="space-y-3">
               <DialogTitle className="text-xl font-bold tracking-tighter">Draft Inbox</DialogTitle>
               <DialogDescription>
-                Review and explicitly send this encrypted draft from your workspace.
+                Review this worker-prepared email before sending it from your connected Gmail account.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-3">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">To</span>
-              <Input value={editTo} onChange={(event) => setEditTo(event.target.value)} placeholder="recipient@company.com" />
+              <Input
+                value={editTo}
+                onChange={(event) => setEditTo(event.target.value)}
+                placeholder="No recipient detected"
+              />
+              {!editTo.trim() ? (
+                <p className="text-xs text-muted-foreground">
+                  No recipient was found in the source context. Add one before sending.
+                </p>
+              ) : null}
             </div>
             <div className="grid gap-3">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Subject</span>
@@ -442,7 +440,10 @@ export function DraftReviewer() {
                 <Button variant="ghost" onClick={() => setSelectedLocalDraft(null)}>
                   Later
                 </Button>
-                <Button onClick={handleSendLocalDraft} disabled={isSending || !user?.google_connected}>
+                <Button
+                  onClick={handleSendLocalDraft}
+                  disabled={isSending || !user?.google_connected || !editTo.trim()}
+                >
                   {isSending ? "Sending..." : "Send"} <Send className="ml-2 h-4 w-4" />
                 </Button>
               </div>
