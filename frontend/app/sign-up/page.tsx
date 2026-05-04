@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays, MessageSquareMore, UserRoundPlus } from "lucide-react";
 
 import { useAuth } from "@/components/providers/auth-provider";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -98,34 +97,32 @@ export default function SignUpPage() {
   }
 
   return (
-    <div className="grid min-h-[calc(100vh-10rem)] items-center gap-5 xl:grid-cols-[minmax(0,1fr)_480px]">
-      <Card className="border border-border bg-card  bg-card">
-        <CardHeader>
-          <Badge className="w-fit">New Account</Badge>
-          <CardTitle className="max-w-2xl font-sans text-4xl font-black uppercase tracking-[-0.05em]">
+    <div className="grid min-h-[calc(100vh-12rem)] items-center gap-8 xl:grid-cols-[minmax(0,1fr)_480px]">
+      <Card className="bg-surface">
+        <CardHeader className="gap-4">
+          <Badge variant="secondary">New Account</Badge>
+          <CardTitle className="max-w-2xl text-3xl font-medium tracking-tight text-on-surface">
             Create your workspace and connect the sources that already know your business.
           </CardTitle>
-          <CardDescription className="max-w-2xl text-base">
+          <CardDescription className="max-w-2xl text-base text-on-surface-variant">
             Start with email and password, then connect Google and Slack from the ingest surface to replace manual entry.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="border border-border px-4 py-4  bg-background">
-            <p className="mono-label text-foreground/50">What gets created</p>
-            <p className="mt-3 text-sm leading-7 text-foreground/75">
+          <div className="rounded-xl surface-high px-5 py-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-on-surface-variant">What gets created</p>
+            <p className="mt-2 text-sm leading-7 text-on-surface">
               A private operator workspace with notifications, meetings, promises, drafts, archive memory, and connected-source sync.
             </p>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="border border-border bg-card ">
-        <CardHeader>
-          <Badge variant="secondary" className="w-fit">
-            Sign Up
-          </Badge>
-          <CardTitle className="font-sans text-3xl font-black uppercase tracking-tight">Create account.</CardTitle>
-          <CardDescription>
+      <Card className="bg-surface">
+        <CardHeader className="gap-4">
+          <Badge>Sign Up</Badge>
+          <CardTitle className="text-3xl font-medium tracking-tight text-on-surface">Create account.</CardTitle>
+          <CardDescription className="text-on-surface-variant">
             Use a work email and a password with at least 8 characters.
           </CardDescription>
         </CardHeader>
@@ -160,11 +157,11 @@ export default function SignUpPage() {
                 required
               />
             </div>
-            <div className="border border-neutral-300 px-4 py-4">
-              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-neutral-500">
+            <div className="rounded-xl surface-high px-5 py-4">
+              <p className="text-xs font-medium uppercase tracking-wider text-on-surface-variant">
                 End-to-end encrypted by default
               </p>
-              <p className="mt-3 text-sm leading-7 text-neutral-700">
+              <p className="mt-2 text-sm leading-7 text-on-surface">
                 Founder OS stores only your client-wrapped private key. Background systems can prepare drafts, but only you can open the workspace and explicitly send them.
               </p>
             </div>
@@ -181,9 +178,9 @@ export default function SignUpPage() {
             </Button>
           </form>
 
-          <div className="mt-6 text-sm text-muted-foreground">
+          <div className="mt-6 text-sm text-on-surface-variant">
             Already have an account?{" "}
-            <Link href="/sign-in" className="text-foreground underline-offset-4 hover:underline">
+            <Link href="/sign-in" className="text-primary font-medium underline-offset-4 hover:underline">
               Sign in
             </Link>
           </div>

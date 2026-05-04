@@ -92,34 +92,32 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="grid min-h-[calc(100vh-10rem)] items-center gap-5 xl:grid-cols-[minmax(0,1fr)_480px]">
-      <Card className="border border-border bg-card  bg-card">
-        <CardHeader>
-          <Badge className="w-fit">Private Workspace</Badge>
-          <CardTitle className="max-w-2xl font-sans text-4xl font-black uppercase tracking-[-0.05em]">
+    <div className="grid min-h-[calc(100vh-12rem)] items-center gap-8 xl:grid-cols-[minmax(0,1fr)_480px]">
+      <Card className="bg-surface">
+        <CardHeader className="gap-4">
+          <Badge variant="secondary">Private Workspace</Badge>
+          <CardTitle className="max-w-2xl text-3xl font-medium tracking-tight text-on-surface">
             Sign in to access your synced founder context.
           </CardTitle>
-          <CardDescription className="max-w-2xl text-base">
+          <CardDescription className="max-w-2xl text-base text-on-surface-variant">
             Once signed in, you can connect Google Calendar, Gmail, and Slack and stop pasting context manually.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="border border-border px-4 py-4  bg-background">
-            <p className="mono-label text-foreground/50">What unlocks after sign in</p>
-            <p className="mt-3 text-sm leading-7 text-foreground/75">
+          <div className="rounded-xl surface-high px-5 py-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-on-surface-variant">What unlocks after sign in</p>
+            <p className="mt-2 text-sm leading-7 text-on-surface">
               Google sync, Slack sync, live assistant notifications, promise tracking, draft replies, mentor runs, and private memory review.
             </p>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="border border-border bg-card ">
-        <CardHeader>
-          <Badge variant="secondary" className="w-fit">
-            Sign In
-          </Badge>
-          <CardTitle className="font-sans text-3xl font-black uppercase tracking-tight">Welcome back.</CardTitle>
-          <CardDescription>
+      <Card className="bg-surface">
+        <CardHeader className="gap-4">
+          <Badge>Sign In</Badge>
+          <CardTitle className="text-3xl font-medium tracking-tight text-on-surface">Welcome back.</CardTitle>
+          <CardDescription className="text-on-surface-variant">
             Use your email and password to open your workspace.
           </CardDescription>
         </CardHeader>
@@ -165,9 +163,9 @@ export default function SignInPage() {
             </Button>
           </form>
 
-          <div className="mt-6 text-sm text-muted-foreground">
+          <div className="mt-6 text-sm text-on-surface-variant">
             Need an account?{" "}
-            <Link href="/sign-up" className="text-foreground underline-offset-4 hover:underline">
+            <Link href="/sign-up" className="text-primary font-medium underline-offset-4 hover:underline">
               Create one
             </Link>
           </div>

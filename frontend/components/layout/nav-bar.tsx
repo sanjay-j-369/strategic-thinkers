@@ -36,7 +36,7 @@ const navigation = [
   { href: "/privacy", label: "Memory" },
 ];
 
-export function SiteHeader() {
+function NavBar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading, isAuthenticated, signOut } = useAuth();
@@ -51,7 +51,7 @@ export function SiteHeader() {
               <Radar className="h-6 w-6" />
             </div>
             <div>
-              <div className="text-xl font-normal tracking-[-0.02em] text-on-surface">
+              <div className="text-xl font-medium tracking-tight text-on-surface">
                 Founder OS
               </div>
               <div className="text-xs font-medium tracking-wide text-on-surface-variant">
@@ -66,7 +66,7 @@ export function SiteHeader() {
             {navigation.map(({ href, label }) => {
               const isActive = pathname === href;
               return (
-                <Link key={href} href={href} className="relative interactive">
+                <Link key={href} href={href} className="relative inline-flex interactive">
                   {isActive && (
                     <motion.span
                       layoutId="active-nav-pill"
@@ -101,12 +101,12 @@ export function SiteHeader() {
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md rounded-[28px] border-none shadow-soft-lg">
                   <DialogHeader>
-                    <DialogTitle className="text-2xl font-normal tracking-tight">User Profile</DialogTitle>
+                    <DialogTitle className="text-2xl font-medium tracking-tight">User Profile</DialogTitle>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="rounded-[28px] bg-surface-high px-6 py-5">
                       <div className="text-xs font-medium uppercase tracking-wider text-on-surface-variant">Workspace</div>
-                      <div className="mt-2 text-lg font-normal tracking-tight text-on-surface">
+                      <div className="mt-2 text-lg font-medium tracking-tight text-on-surface">
                         {user.full_name || user.email}
                       </div>
                       <div className="mt-1 text-sm text-on-surface-variant">{user.email}</div>
@@ -148,7 +148,7 @@ export function SiteHeader() {
           ) : (
             <>
               {!isAuthPage && (
-                <Button asChild size="sm" variant="secondary" className="px-6">
+                <Button asChild size="sm" variant="ghost" className="px-5">
                   <Link href="/sign-in">Sign In</Link>
                 </Button>
               )}
@@ -162,3 +162,5 @@ export function SiteHeader() {
     </header>
   );
 }
+
+export { NavBar };

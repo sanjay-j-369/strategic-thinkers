@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-
 import { cn } from "@/lib/utils";
 
 const Label = React.forwardRef<
@@ -11,7 +10,7 @@ const Label = React.forwardRef<
   <label
     ref={ref}
     className={cn(
-      "font-pixel text-[12px] uppercase tracking-[0.22em] text-foreground/55",
+      "text-sm font-medium leading-none text-on-surface peer-disabled:cursor-not-allowed peer-disabled:opacity-50",
       className
     )}
     {...props}

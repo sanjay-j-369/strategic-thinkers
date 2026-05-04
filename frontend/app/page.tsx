@@ -331,73 +331,73 @@ export default function FeedPage() {
 
   return (
     <div className="space-y-8">
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_420px]">
-        <Card className="panel-pro overflow-hidden bg-primary text-primary-foreground">
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_420px]">
+        <Card className="bg-surface-high">
           <CardHeader className="gap-6 pb-6">
             <div className="flex flex-wrap items-center gap-2">
               <Badge>Active AI Organization</Badge>
               <Badge variant="outline">Workers / Assistant / Mentor</Badge>
               {user?.security_mode ? (
-                <span className="inline-flex items-center gap-2 border border-primary-foreground/25 px-3 py-1 text-xs uppercase tracking-[0.18em] text-primary-foreground/80">
+                <span className="inline-flex items-center gap-2 rounded-full surface-high px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-on-surface">
                   <Lock className="h-3.5 w-3.5" />
                   Vault Mode Active
                 </span>
               ) : null}
-              <span className="inline-flex items-center gap-2 rounded-full border border-primary-foreground/25 px-3 py-1 text-xs uppercase tracking-[0.18em] text-primary-foreground/80">
-                <span className="live-dot bg-primary-foreground" />
+              <span className="inline-flex items-center gap-2 rounded-full surface-high px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-on-surface">
+                <span className="live-dot bg-primary" />
                 Live pipeline
               </span>
             </div>
-            <div className="space-y-4">
-              <CardTitle className="max-w-4xl font-sans text-5xl font-black uppercase tracking-[-0.06em] md:text-6xl text-primary-foreground">
-                Founder control room
+            <div className="space-y-3">
+              <CardTitle className="max-w-4xl text-4xl font-medium tracking-tight text-on-surface md:text-5xl">
+                Founder Control Room
               </CardTitle>
-              <CardDescription className="max-w-3xl text-lg leading-8 text-primary-foreground/80">
+              <CardDescription className="max-w-3xl text-base leading-relaxed text-on-surface-variant">
                 Review what needs action now: new signals, open promises, pending drafts, and worker output tied to your connected sources.
               </CardDescription>
             </div>
           </CardHeader>
-          <CardContent className="grid gap-4 border-t-2 border-border pt-6">
+          <CardContent className="grid gap-4 pt-0">
             {isAuthenticated ? (
               <>
                 <div className="grid gap-3 md:grid-cols-3">
-                  <div className="border border-primary-foreground/25 px-4 py-4">
-                    <p className="mono-label text-primary-foreground/60">Sources connected</p>
-                    <p className="mt-2 text-4xl font-black">{connectedSourceCount}/2</p>
+                  <div className="rounded-xl surface px-4 py-4">
+                    <p className="text-xs font-medium uppercase tracking-wider text-on-surface-variant">Sources connected</p>
+                    <p className="mt-2 text-3xl font-medium tracking-tight text-on-surface">{connectedSourceCount}/2</p>
                   </div>
-                  <div className="border border-primary-foreground/25 px-4 py-4">
-                    <p className="mono-label text-primary-foreground/60">Drafts waiting</p>
-                    <p className="mt-2 text-4xl font-black">{drafts.length}</p>
+                  <div className="rounded-xl surface px-4 py-4">
+                    <p className="text-xs font-medium uppercase tracking-wider text-on-surface-variant">Drafts waiting</p>
+                    <p className="mt-2 text-3xl font-medium tracking-tight text-on-surface">{drafts.length}</p>
                   </div>
-                  <div className="border border-primary-foreground/25 px-4 py-4">
-                    <p className="mono-label text-primary-foreground/60">Open promises</p>
-                    <p className="mt-2 text-4xl font-black">{promises.length}</p>
+                  <div className="rounded-xl surface px-4 py-4">
+                    <p className="text-xs font-medium uppercase tracking-wider text-on-surface-variant">Open promises</p>
+                    <p className="mt-2 text-3xl font-medium tracking-tight text-on-surface">{promises.length}</p>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-3">
-                  <Button asChild size="lg">
+                  <Button asChild size="lg" className="bg-primary text-on-primary hover:bg-primary/90">
                     <Link href="#drafts">
                       Review Drafts
                       <ArrowRight className="h-4 w-4" />
                     </Link>
                   </Button>
-                  <Button asChild size="lg" variant="secondary">
+                  <Button asChild size="lg" variant="outline" className="border-outline text-on-surface hover:bg-state-layer-hover">
                     <Link href="/ingest">Connect Sources</Link>
                   </Button>
-                  <Button asChild size="lg" variant="secondary">
+                  <Button asChild size="lg" variant="outline" className="border-outline text-on-surface hover:bg-state-layer-hover">
                     <Link href="/privacy">Open Archive</Link>
                   </Button>
-                  <Button asChild size="lg" variant="secondary">
+                  <Button asChild size="lg" variant="outline" className="border-outline text-on-surface hover:bg-state-layer-hover">
                     <Link href="/guide">Ask Mentor</Link>
                   </Button>
                 </div>
               </>
             ) : (
               <div className="flex flex-wrap gap-3">
-                <Button asChild size="lg">
+                <Button asChild size="lg" className="bg-primary text-on-primary hover:bg-primary/90">
                   <Link href="/sign-up">Create Workspace</Link>
                 </Button>
-                <Button asChild size="lg" variant="secondary">
+                <Button asChild size="lg" variant="outline" className="border-outline text-on-surface hover:bg-state-layer-hover">
                   <Link href="/sign-in">Sign In</Link>
                 </Button>
               </div>
@@ -405,37 +405,37 @@ export default function FeedPage() {
           </CardContent>
         </Card>
 
-        <Card className="panel-pro bg-card text-card-foreground">
-          <CardHeader>
-            <Badge>Workspace</Badge>
-            <CardTitle className="font-sans text-3xl font-black uppercase tracking-[-0.05em]">
+        <Card className="bg-surface">
+          <CardHeader className="gap-4">
+            <Badge variant="secondary">Workspace</Badge>
+            <CardTitle className="text-2xl font-medium tracking-tight text-on-surface">
               {isAuthenticated ? "Ready" : "Locked"}
             </CardTitle>
-            <CardDescription className="text-base text-card-foreground/70">
+            <CardDescription className="text-base text-on-surface-variant">
               {isAuthenticated
                 ? "Use the links below to open the data surfaces that already exist in your workspace."
                 : "Authenticate to unlock founder-specific operations, signals, drafts, and prep."}
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
-            <div className="border border-border px-4 py-4  bg-background text-foreground">
-              <p className="mono-label text-foreground/50">Current identity</p>
-              <p className="mt-2 text-2xl font-black uppercase tracking-tight">
+            <div className="rounded-xl surface-high px-5 py-4">
+              <p className="text-xs font-medium uppercase tracking-wider text-on-surface-variant">Current identity</p>
+              <p className="mt-2 text-lg font-medium tracking-tight text-on-surface">
                 {user?.full_name || user?.email || "anonymous"}
               </p>
             </div>
-            <div className="border border-border px-4 py-4  bg-background text-foreground">
-              <p className="mono-label text-foreground/50">Connected sources</p>
-              <p className="mt-2 text-3xl font-bold tracking-tighter">
+            <div className="rounded-xl surface-high px-5 py-4">
+              <p className="text-xs font-medium uppercase tracking-wider text-on-surface-variant">Connected sources</p>
+              <p className="mt-2 text-lg font-medium tracking-tight text-on-surface">
                 {user?.google_connected ? "Google" : "Google off"} / {user?.slack_connected ? "Slack" : "Slack off"}
               </p>
             </div>
-            <div className="border border-border px-4 py-4  bg-background text-foreground">
-              <p className="mono-label text-foreground/60">Encrypted workspace</p>
-              <p className="mt-2 text-3xl font-bold tracking-tighter">
+            <div className="rounded-xl surface-high px-5 py-4">
+              <p className="text-xs font-medium uppercase tracking-wider text-on-surface-variant">Encrypted workspace</p>
+              <p className="mt-2 text-lg font-medium tracking-tight text-on-surface">
                 {privateKey ? "Unlocked" : "Locked"}
               </p>
-              <p className="mt-1 text-sm font-medium">
+              <p className="mt-1 text-sm text-on-surface-variant">
                 {privateKey ? "Client decryption available in this session" : "Unlock on demand from the archive page"}
               </p>
             </div>
@@ -446,18 +446,18 @@ export default function FeedPage() {
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {metrics.map(({ label, value, icon: Icon, href, detail }, index) => (
           <Link key={label} href={href} className="block">
-            <Card className="border border-border bg-card hover:-translate-y-0.5">
+            <Card className="bg-surface hover:shadow-soft-md transition-shadow duration-200">
               <CardContent className="pt-6">
               <div
-                className={`mb-4 flex h-12 w-12 items-center justify-center border border-border ${
-                  index % 2 === 0 ? "bg-primary text-primary-foreground" : "bg-background text-foreground"
+                className={`mb-4 flex h-12 w-12 items-center justify-center rounded-full ${
+                  index % 2 === 0 ? "bg-primary-container text-on-primary-container" : "bg-surface-high text-on-surface"
                 }`}
               >
                 <Icon className="h-5 w-5" />
               </div>
-              <p className="mono-label text-foreground/50">{label}</p>
-              <p className="mt-3 text-4xl font-black tracking-[-0.08em] text-foreground">{value}</p>
-              <p className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">{detail}</p>
+              <p className="text-xs font-medium uppercase tracking-wider text-on-surface-variant">{label}</p>
+              <p className="mt-3 text-3xl font-medium tracking-tight text-on-surface">{value}</p>
+              <p className="mt-2 text-xs font-medium uppercase tracking-wider text-on-surface-variant">{detail}</p>
               </CardContent>
             </Card>
           </Link>

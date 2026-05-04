@@ -1,16 +1,19 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 
-import { SiteHeader } from "@/components/layout/site-header";
+import { NavBar } from "@/components/layout/nav-bar";
 import { AuthProvider } from "@/components/providers/auth-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { DemoControls } from "@/components/DemoControls";
 
 import "./globals.css";
 
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+
 export const metadata: Metadata = {
   title: "Founder OS",
   description:
-    "A monochrome founder command center for live context, strategic guidance, and privacy controls.",
+    "A sleek and approachable founder command center for live context, strategic guidance, and privacy controls.",
 };
 
 export default function RootLayout({
@@ -19,14 +22,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-background font-sans text-foreground antialiased">
+    <html lang="en" className={inter.variable}>
+      <body className="min-h-screen bg-background text-foreground antialiased">
         <ThemeProvider>
           <AuthProvider>
-            <div className="px-4 pb-10 pt-4 sm:px-6 lg:px-8">
-              <SiteHeader />
-              <main className="mx-auto max-w-7xl">{children}</main>
-            </div>
+            <NavBar />
+            <main className="mx-auto max-w-7xl px-4 pb-12 pt-4 sm:px-6 lg:px-8">
+              {children}
+            </main>
             <DemoControls />
           </AuthProvider>
         </ThemeProvider>
