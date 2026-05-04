@@ -60,7 +60,7 @@ export default function SignInPage() {
         json: { email, password },
       });
 
-      if (data.user.security_mode === "vault" && data.encrypted_private_key) {
+      if (data.encrypted_private_key) {
         try {
           const { salt } = await apiFetch<{ salt: string }>(
             `/api/auth/key-salt?email=${encodeURIComponent(email)}`
@@ -78,11 +78,9 @@ export default function SignInPage() {
         }
       } else {
         setPrivateKey(null);
-        if (data.user.security_mode === "vault") {
-          setWarning(
-            "Signed in without encrypted private-key material. Re-run sign up with the same email to initialize private workspace encryption."
-          );
-        }
+        setWarning(
+          "Signed in without encrypted private-key material. Re-run sign up with the same email to initialize private workspace encryption."
+        );
       }
       setSession(data.token, data.user);
       router.replace(redirectTo);

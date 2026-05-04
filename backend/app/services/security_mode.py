@@ -26,11 +26,7 @@ def load_user_security_context(user_id: str) -> dict:
             raise ValueError("User not found")
         return {
             "email": user.email,
-            "security_mode": (
-                user.security_mode.value
-                if hasattr(user.security_mode, "value")
-                else str(user.security_mode)
-            ),
+            "security_mode": "vault",
             "google_connected": bool(user.google_token),
         }
 

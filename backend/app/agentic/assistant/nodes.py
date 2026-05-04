@@ -117,7 +117,7 @@ def detect_vip_interruptions(state: AssistantState) -> AssistantState:
 
 def detect_context_routing(state: AssistantState) -> AssistantState:
     routing_tasks: list[dict] = []
-    security_mode = state.get("security_mode", "magic")
+    security_mode = "vault"
     for item in state.get("recent_items", []):
         text = item.get("text", "")
         lowered = text.lower()
@@ -141,17 +141,10 @@ def detect_context_routing(state: AssistantState) -> AssistantState:
         if "customer" in related_promise.get("promise_text", "").lower():
             stakeholder = "Customer"
         subject = f"Update for {stakeholder}: recent product milestone"
-        if security_mode == "magic":
-            body = (
-                f"Assistant drafted an update to {stakeholder} based on recent Slack activity.\n\n"
-                f"Slack signal: {text[:220]}\n\n"
-                f"Promise context: {related_promise.get('promise_text', '')[:220]}"
-            )
-        else:
-            body = (
-                f"Assistant drafted a vault-safe update to {stakeholder} based on recent Slack activity.\n\n"
-                "Resolve private names and deliver this from the app."
-            )
+        body = (
+            f"Assistant drafted a vault-safe update to {stakeholder} based on recent Slack activity.\n\n"
+            "Resolve private names and deliver this from the app."
+        )
         routing_tasks.append(
             {
                 "source_ref": item.get("id"),

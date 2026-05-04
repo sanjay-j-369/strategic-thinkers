@@ -17,7 +17,7 @@ export interface AuthUser {
   id: string;
   email: string;
   full_name: string | null;
-  security_mode: "vault" | "magic";
+  security_mode: "vault";
   created_at: string;
   google_connected: boolean;
   slack_connected: boolean;

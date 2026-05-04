@@ -77,10 +77,9 @@ interface WorkerItem {
   config: {
     monitor_targets?: string;
     auto_draft_replies?: boolean;
-    daily_digest_emails?: boolean;
     custom_instructions?: string;
   };
-  security_mode: "vault" | "magic";
+  security_mode: "vault";
   live_status: string;
   updated_at?: string | null;
 }
@@ -285,11 +284,11 @@ export default function FeedPage() {
       (item) => item.pillar === "MENTOR" || item.notification_type === "GUIDE_QUERY"
     ).length;
     return [
-      { label: "Unread Signals", value: unread, icon: Bell },
-      { label: "Open Promises", value: promises.length, icon: AlarmClock },
-      { label: "Draft Replies", value: drafts.length, icon: Inbox },
-      { label: "Worker Alerts", value: workerAlerts, icon: BriefcaseBusiness },
-      { label: "Mentor Notes", value: mentorAlerts, icon: Sparkles },
+      { label: "Unread Signals", value: unread, icon: Bell, href: "#signals", detail: "Open feed" },
+      { label: "Open Promises", value: promises.length, icon: AlarmClock, href: "#promises", detail: "Review promises" },
+      { label: "Draft Replies", value: drafts.length, icon: Inbox, href: "#drafts", detail: "Review drafts" },
+      { label: "Worker Alerts", value: workerAlerts, icon: BriefcaseBusiness, href: "#worker-runtime", detail: "Open workers" },
+      { label: "Mentor Notes", value: mentorAlerts, icon: Sparkles, href: "#signals", detail: "Open mentor feed" },
     ];
   }, [drafts.length, promises.length, signals]);
 
@@ -319,15 +318,6 @@ export default function FeedPage() {
       })),
     [piiMap, promises]
   );
-  const visibleDrafts = useMemo(
-    () =>
-      drafts.map((item) => ({
-        ...item,
-        prompt: replacePIITokens(item.prompt, piiMap),
-        draft_text: replacePIITokens(item.draft_text, piiMap),
-      })),
-    [drafts, piiMap]
-  );
   const dashboardMetrics = opsStatus
     ? [
         { label: "Tasks in Progress", value: opsStatus.queue.counts.pending, accent: "bg-primary text-primary-foreground" },
@@ -337,6 +327,7 @@ export default function FeedPage() {
       ]
     : [];
   const hiredWorkers = workers;
+  const connectedSourceCount = Number(Boolean(user?.google_connected)) + Number(Boolean(user?.slack_connected));
 
   return (
     <div className="space-y-8">
@@ -348,8 +339,8 @@ export default function FeedPage() {
               <Badge variant="outline">Workers / Assistant / Mentor</Badge>
               {user?.security_mode ? (
                 <span className="inline-flex items-center gap-2 border border-primary-foreground/25 px-3 py-1 text-xs uppercase tracking-[0.18em] text-primary-foreground/80">
-                  {user.security_mode === "vault" ? <Lock className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
-                  {user.security_mode === "vault" ? "Vault Mode Active" : "Magic Mode Active"}
+                  <Lock className="h-3.5 w-3.5" />
+                  Vault Mode Active
                 </span>
               ) : null}
               <span className="inline-flex items-center gap-2 rounded-full border border-primary-foreground/25 px-3 py-1 text-xs uppercase tracking-[0.18em] text-primary-foreground/80">
@@ -358,49 +349,71 @@ export default function FeedPage() {
               </span>
             </div>
             <div className="space-y-4">
-              <CardTitle className="max-w-4xl font-sans text-5xl font-black uppercase tracking-[-0.06em] md:text-7xl text-primary-foreground">
-                Founder control room.
+              <CardTitle className="max-w-4xl font-sans text-5xl font-black uppercase tracking-[-0.06em] md:text-6xl text-primary-foreground">
+                Founder control room
               </CardTitle>
               <CardDescription className="max-w-3xl text-lg leading-8 text-primary-foreground/80">
-                The backend now runs like an operating system: background workers surface blockers, the assistant tracks promises and drafts replies, and the mentor flags strategic risk before it becomes obvious.
+                Review what needs action now: new signals, open promises, pending drafts, and worker output tied to your connected sources.
               </CardDescription>
             </div>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-3 border-t-2 border-border pt-6">
+          <CardContent className="grid gap-4 border-t-2 border-border pt-6">
             {isAuthenticated ? (
               <>
-                <Button asChild size="lg">
-                  <Link href="/guide">
-                    Queue Mentor Question
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-                <Button asChild size="lg" variant="secondary">
-                  <Link href="/ingest">Connect Sources</Link>
-                </Button>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="border border-primary-foreground/25 px-4 py-4">
+                    <p className="mono-label text-primary-foreground/60">Sources connected</p>
+                    <p className="mt-2 text-4xl font-black">{connectedSourceCount}/2</p>
+                  </div>
+                  <div className="border border-primary-foreground/25 px-4 py-4">
+                    <p className="mono-label text-primary-foreground/60">Drafts waiting</p>
+                    <p className="mt-2 text-4xl font-black">{drafts.length}</p>
+                  </div>
+                  <div className="border border-primary-foreground/25 px-4 py-4">
+                    <p className="mono-label text-primary-foreground/60">Open promises</p>
+                    <p className="mt-2 text-4xl font-black">{promises.length}</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <Button asChild size="lg">
+                    <Link href="#drafts">
+                      Review Drafts
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <Button asChild size="lg" variant="secondary">
+                    <Link href="/ingest">Connect Sources</Link>
+                  </Button>
+                  <Button asChild size="lg" variant="secondary">
+                    <Link href="/privacy">Open Archive</Link>
+                  </Button>
+                  <Button asChild size="lg" variant="secondary">
+                    <Link href="/guide">Ask Mentor</Link>
+                  </Button>
+                </div>
               </>
             ) : (
-              <>
+              <div className="flex flex-wrap gap-3">
                 <Button asChild size="lg">
                   <Link href="/sign-up">Create Workspace</Link>
                 </Button>
                 <Button asChild size="lg" variant="secondary">
                   <Link href="/sign-in">Sign In</Link>
                 </Button>
-              </>
+              </div>
             )}
           </CardContent>
         </Card>
 
         <Card className="panel-pro bg-card text-card-foreground">
           <CardHeader>
-            <Badge>Operator Snapshot</Badge>
+            <Badge>Workspace</Badge>
             <CardTitle className="font-sans text-3xl font-black uppercase tracking-[-0.05em]">
-              {isAuthenticated ? "Live" : "Locked"}
+              {isAuthenticated ? "Ready" : "Locked"}
             </CardTitle>
             <CardDescription className="text-base text-card-foreground/70">
               {isAuthenticated
-                ? "Websocket notifications stream in as the background organization runs."
+                ? "Use the links below to open the data surfaces that already exist in your workspace."
                 : "Authenticate to unlock founder-specific operations, signals, drafts, and prep."}
             </CardDescription>
           </CardHeader>
@@ -411,44 +424,30 @@ export default function FeedPage() {
                 {user?.full_name || user?.email || "anonymous"}
               </p>
             </div>
-            <div className="border border-border px-4 py-4  bg-primary text-primary-foreground">
-              <p className="mono-label text-primary-foreground/60">Signal volume</p>
-              <p className="mt-2 text-4xl font-black">{signals.length}</p>
+            <div className="border border-border px-4 py-4  bg-background text-foreground">
+              <p className="mono-label text-foreground/50">Connected sources</p>
+              <p className="mt-2 text-3xl font-bold tracking-tighter">
+                {user?.google_connected ? "Google" : "Google off"} / {user?.slack_connected ? "Slack" : "Slack off"}
+              </p>
             </div>
             <div className="border border-border px-4 py-4  bg-background text-foreground">
-              <p className="mono-label text-foreground/60">Runway</p>
+              <p className="mono-label text-foreground/60">Encrypted workspace</p>
               <p className="mt-2 text-3xl font-bold tracking-tighter">
-                {demoMode && user?.email === "alex@demo-founders.ai" && snapshot?.profile ? `${snapshot.profile.runway_months ?? "-"} mo` : "0 mo"}
+                {privateKey ? "Unlocked" : "Locked"}
               </p>
               <p className="mt-1 text-sm font-medium">
-                {demoMode && user?.email === "alex@demo-founders.ai" && snapshot?.profile ? `$${Math.round(snapshot.profile.mrr_usd || 0).toLocaleString()} MRR` : "Connect Data"}
+                {privateKey ? "Client decryption available in this session" : "Unlock on demand from the archive page"}
               </p>
             </div>
           </CardContent>
         </Card>
       </section>
 
-      <section className="neo-marquee border border-border bg-foreground py-3 text-background">
-        <div className="neo-marquee-track text-sm font-black uppercase tracking-[0.24em]">
-          <span>Founder OS</span>
-          <span>Live Pipeline</span>
-          <span>Workers Online</span>
-          <span>Assistant Watch</span>
-          <span>Mentor Signals</span>
-          <span>Encrypted Memory</span>
-          <span>Founder OS</span>
-          <span>Live Pipeline</span>
-          <span>Workers Online</span>
-          <span>Assistant Watch</span>
-          <span>Mentor Signals</span>
-          <span>Encrypted Memory</span>
-        </div>
-      </section>
-
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        {metrics.map(({ label, value, icon: Icon }, index) => (
-          <Card key={label} className="border border-border bg-card ">
-            <CardContent className="pt-6">
+        {metrics.map(({ label, value, icon: Icon, href, detail }, index) => (
+          <Link key={label} href={href} className="block">
+            <Card className="border border-border bg-card hover:-translate-y-0.5">
+              <CardContent className="pt-6">
               <div
                 className={`mb-4 flex h-12 w-12 items-center justify-center border border-border ${
                   index % 2 === 0 ? "bg-primary text-primary-foreground" : "bg-background text-foreground"
@@ -458,8 +457,10 @@ export default function FeedPage() {
               </div>
               <p className="mono-label text-foreground/50">{label}</p>
               <p className="mt-3 text-4xl font-black tracking-[-0.08em] text-foreground">{value}</p>
-            </CardContent>
-          </Card>
+              <p className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">{detail}</p>
+              </CardContent>
+            </Card>
+          </Link>
         ))}
       </section>
 
@@ -535,7 +536,7 @@ export default function FeedPage() {
                     </div>
                   </div>
 
-                  <div className="space-y-3">
+                  <div id="worker-runtime" className="space-y-3">
                     <div className="flex items-end justify-between gap-3">
                       <div>
                         <p className="mono-label text-foreground/50">Active workers</p>
@@ -575,9 +576,7 @@ export default function FeedPage() {
                               Monitoring: {worker.config.monitor_targets || "Default routing"}
                             </p>
                             <p className="text-xs uppercase tracking-[0.18em] text-foreground/50">
-                              {worker.security_mode === "vault"
-                                ? "Vault Mode: local sync required"
-                                : `Magic Mode: digest emails ${worker.config.daily_digest_emails ? "enabled" : "disabled"}`}
+                              Vault Mode: founder review required before send
                             </p>
                           </div>
                         ))}
@@ -753,9 +752,65 @@ export default function FeedPage() {
         </section>
       ) : null}
 
+      <section id="promises" className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_420px]">
+        <Card className="panel-pro">
+          <CardHeader>
+            <Badge>Open Promises</Badge>
+            <CardTitle className="font-sans text-2xl font-black uppercase tracking-tight">
+              Commitments waiting on you
+            </CardTitle>
+            <CardDescription>
+              Recent promises extracted from your communications. Use this as the short list of follow-ups to clear.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {visiblePromises.length === 0 ? (
+              <div className="border border-border px-4 py-8 bg-background text-center text-sm text-foreground/60">
+                No open promises detected yet.
+              </div>
+            ) : (
+              visiblePromises.slice(0, 6).map((item) => (
+                <div key={item.id} className="border border-border px-4 py-4 bg-background">
+                  <p className="text-sm leading-7 text-foreground">{item.promise_text}</p>
+                  <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-foreground/50">
+                    {new Date(item.created_at).toLocaleString()}
+                  </p>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="panel-pro">
+          <CardHeader>
+            <Badge variant="outline">Archive</Badge>
+            <CardTitle className="font-sans text-2xl font-black uppercase tracking-tight">
+              Stored source data
+            </CardTitle>
+            <CardDescription>
+              Open the encrypted archive to inspect imported content, decrypt it in-browser, or remove entries.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="border border-border px-4 py-4 bg-background">
+              <p className="mono-label text-foreground/50">Workspace key</p>
+              <p className="mt-2 text-2xl font-black text-foreground">
+                {privateKey ? "Unlocked" : "Locked"}
+              </p>
+              <p className="mt-2 text-sm text-foreground/65">
+                {privateKey ? "Archive entries can be decrypted in this session." : "Open Archive and unlock the workspace to view original private content."}
+              </p>
+            </div>
+            <Button asChild className="w-full">
+              <Link href="/privacy">Open Archive</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </section>
+
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_360px]">
         <div className="space-y-4">
-          <div className="flex items-end justify-between gap-3">
+          <div id="signals" className="flex items-end justify-between gap-3">
             <div>
               <p className="mono-label text-foreground/50">Live feed</p>
               <h2 className="mt-2 flex items-center gap-3 text-4xl font-black uppercase tracking-[-0.06em] text-foreground">
@@ -809,7 +864,9 @@ export default function FeedPage() {
         </div>
 
         <div className="space-y-4">
-          <DraftReviewer />
+          <div id="drafts">
+            <DraftReviewer />
+          </div>
         </div>
       </section>
     </div>

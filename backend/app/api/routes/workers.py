@@ -60,11 +60,7 @@ async def list_workers(request: Request):
                 "description": item.description,
                 "status": status,
                 "config": config,
-                "security_mode": (
-                    user.security_mode.value
-                    if hasattr(user.security_mode, "value")
-                    else str(user.security_mode)
-                ),
+                "security_mode": "vault",
                 "live_status": live_status,
                 "updated_at": row.updated_at.isoformat() if row else None,
             }
@@ -115,11 +111,7 @@ async def hire_worker(worker_key: str, request: Request):
         "description": row.description,
         "status": row.status.value,
         "config": row.config,
-        "security_mode": (
-            user.security_mode.value
-            if hasattr(user.security_mode, "value")
-            else str(user.security_mode)
-        ),
+        "security_mode": "vault",
         "live_status": "Sleeping",
         "updated_at": row.updated_at.isoformat(),
     }
@@ -156,11 +148,7 @@ async def update_worker_config(worker_key: str, body: WorkerConfigUpdate, reques
         "description": row.description,
         "status": row.status.value,
         "config": row.config,
-        "security_mode": (
-            user.security_mode.value
-            if hasattr(user.security_mode, "value")
-            else str(user.security_mode)
-        ),
+        "security_mode": "vault",
         "live_status": "Sleeping",
         "updated_at": row.updated_at.isoformat(),
     }

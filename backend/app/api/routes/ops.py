@@ -1,16 +1,33 @@
+import uuid
+from datetime import datetime, timezone
+from email.message import EmailMessage
+import re
+
 from fastapi import APIRouter, HTTPException, Query, Request
+from pydantic import BaseModel
 from sqlalchemy import func, select
 
+from app.api.routes.gmail import encode_message, get_gmail_service, handle_refresh_token
 from app.api.ws import manager
 from app.config import settings
 from app.models.agent_notification import AgentNotification
 from app.models.agent_run import AgentRun
+from app.models.archive import Archive
 from app.models.draft_reply import DraftReply
 from app.models.promise_item import PromiseItem
 from app.models.task_queue import TaskQueue
-from app.security import resolve_user
+from app.security import require_current_user, resolve_user
 
 router = APIRouter(prefix="/api/ops", tags=["ops"])
+
+FROM_EMAIL_PATTERN = re.compile(r"From:\s*([^<\n]+?)\s*<([^>\s]+@[^>\s]+)>", re.IGNORECASE)
+EMAIL_PATTERN = re.compile(r"\b([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})\b", re.IGNORECASE)
+
+
+class SendDraftBody(BaseModel):
+    to_email: str
+    subject: str
+    body: str
 
 
 @router.get("/notifications")
@@ -159,12 +176,99 @@ async def list_drafts(
                 "status": item.status,
                 "prompt": item.prompt,
                 "draft_text": item.draft_text,
-                "context_payload": item.context_payload,
+                "context_payload": await _draft_context_payload(session, user.id, item),
                 "created_at": item.created_at.isoformat(),
             }
             for item in items
         ]
     }
+
+
+@router.post("/drafts/{draft_id}/send")
+async def send_local_draft(
+    draft_id: str,
+    body: SendDraftBody,
+    request: Request,
+):
+    user = await require_current_user(request)
+    try:
+        parsed_draft_id = uuid.UUID(draft_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid draft id") from exc
+
+    async_session = request.app.state.async_session
+    async with async_session() as session:
+        row = (
+            await session.execute(
+                select(DraftReply).where(
+                    DraftReply.id == parsed_draft_id,
+                    DraftReply.user_id == user.id,
+                )
+            )
+        ).scalar_one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail="Draft not found")
+        if row.status != "DRAFT":
+            raise HTTPException(status_code=400, detail="Draft is no longer pending")
+
+        service, creds = get_gmail_service(user)
+        await handle_refresh_token(request, user, creds)
+
+        message = EmailMessage()
+        message.set_content(body.body)
+        message["To"] = body.to_email.strip()
+        message["Subject"] = body.subject.strip() or row.prompt
+
+        try:
+            send_response = service.users().messages().send(
+                userId="me",
+                body={"raw": encode_message(message)},
+            ).execute()
+        except Exception as exc:
+            if "Unauthorized" in str(exc) or "Forbidden" in str(exc) or "invalid_grant" in str(exc):
+                raise HTTPException(status_code=401, detail="Reconnect Google Account") from exc
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+        payload = dict(row.context_payload or {})
+        payload["to_email"] = body.to_email.strip()
+        row.prompt = body.subject.strip() or row.prompt
+        row.draft_text = body.body
+        row.context_payload = payload
+        row.status = "SENT"
+        row.approved_at = datetime.now(timezone.utc)
+        await session.commit()
+
+    return {"status": "sent", "message_id": send_response.get("id")}
+
+
+@router.post("/drafts/{draft_id}/discard")
+async def discard_local_draft(
+    draft_id: str,
+    request: Request,
+):
+    user = await require_current_user(request)
+    try:
+        parsed_draft_id = uuid.UUID(draft_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid draft id") from exc
+
+    async_session = request.app.state.async_session
+    async with async_session() as session:
+        row = (
+            await session.execute(
+                select(DraftReply).where(
+                    DraftReply.id == parsed_draft_id,
+                    DraftReply.user_id == user.id,
+                )
+            )
+        ).scalar_one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail="Draft not found")
+
+        row.status = "DISCARDED"
+        await session.commit()
+
+    return {"status": "discarded", "id": draft_id}
 
 
 @router.get("/runs")
@@ -293,6 +397,57 @@ def _extract_task_user_id(payload: dict) -> str | None:
         metadata = event.get("metadata")
         if isinstance(metadata, dict) and metadata.get("user_id") is not None:
             return str(metadata.get("user_id"))
+    return None
+
+
+async def _draft_context_payload(session, user_id, item: DraftReply) -> dict | None:
+    context_payload = dict(item.context_payload or {})
+    if context_payload.get("to_email"):
+        return context_payload
+
+    recipient = await _infer_recipient_from_source(session, user_id, item.source_ref)
+    if not recipient:
+        return context_payload or None
+
+    if recipient.get("email") and not context_payload.get("to_email"):
+        context_payload["to_email"] = recipient["email"]
+    if recipient.get("name") and not context_payload.get("recipient_hint"):
+        context_payload["recipient_hint"] = recipient["name"]
+    return context_payload
+
+
+async def _infer_recipient_from_source(session, user_id, source_ref: str | None) -> dict[str, str] | None:
+    if not source_ref:
+        return None
+
+    try:
+        parsed_ref = uuid.UUID(source_ref)
+    except ValueError:
+        return None
+
+    archive = (
+        await session.execute(
+            select(Archive).where(
+                Archive.id == parsed_ref,
+                Archive.user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not archive:
+        return None
+
+    text = archive.content_redacted or ""
+    from_match = FROM_EMAIL_PATTERN.search(text)
+    if from_match:
+        return {
+            "name": from_match.group(1).strip(),
+            "email": from_match.group(2).strip(),
+        }
+
+    email_match = EMAIL_PATTERN.search(text)
+    if email_match:
+        return {"email": email_match.group(1).strip()}
+
     return None
 
 

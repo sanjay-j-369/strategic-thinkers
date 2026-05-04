@@ -160,3 +160,18 @@ async def send_draft(draft_id: str, req: SendDraftRequest, request: Request):
         if "Unauthorized" in str(e) or "Forbidden" in str(e) or "invalid_grant" in str(e):
             raise HTTPException(status_code=401, detail="Reconnect Google Account")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/drafts/{draft_id}")
+async def delete_draft(draft_id: str, request: Request):
+    user = await require_current_user(request)
+    service, creds = get_gmail_service(user)
+    await handle_refresh_token(request, user, creds)
+
+    try:
+        service.users().drafts().delete(userId="me", id=draft_id).execute()
+        return {"status": "deleted", "draft_id": draft_id}
+    except Exception as e:
+        if "Unauthorized" in str(e) or "Forbidden" in str(e) or "invalid_grant" in str(e):
+            raise HTTPException(status_code=401, detail="Reconnect Google Account")
+        raise HTTPException(status_code=500, detail=str(e))

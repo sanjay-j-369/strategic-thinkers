@@ -131,7 +131,7 @@ export function SiteHeader() {
                         <p className="text-sm leading-6 text-muted-foreground">
                           {user.public_key
                             ? "Local key material is attached to this account."
-                            : "This account can sign in, but private workspace encryption has not been initialized yet."}
+                            : "Encrypted workspace setup is incomplete for this account. Re-run sign up with the same email once to initialize the vault key."}
                         </p>
                       </div>
                       <div className="grid gap-1">

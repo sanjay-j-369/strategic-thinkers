@@ -15,6 +15,7 @@ from google_auth_oauthlib.flow import Flow
 from pydantic import BaseModel
 from slack_sdk.errors import SlackApiError
 from sqlalchemy import select
+from sqlalchemy.orm import undefer
 
 from app.ingestion.calendar import sync_calendar_events_for_user
 from app.config import settings
@@ -22,7 +23,7 @@ from app.demo.persona import enqueue_demo_history, ensure_demo_persona, get_demo
 from app.ingestion.gmail import GmailWorker
 from app.ingestion.slack import SlackWorker
 from app.models.user import SecurityMode, User
-from app.pipeline.encryption import decrypt, encrypt
+from app.pipeline.encryption import decrypt
 from app.security import (
     create_access_token,
     hash_password,
@@ -69,11 +70,9 @@ class SignUpBody(BaseModel):
     email: str
     password: str
     full_name: str | None = None
-    security_mode: str = "magic"
     salt: str | None = None
     public_key: str | None = None
     encrypted_private_key: str | None = None
-    raw_private_key: str | None = None
 
 
 class SignInBody(BaseModel):
@@ -139,47 +138,15 @@ def _validate_password(password: str) -> None:
         )
 
 
-def _parse_security_mode(value: str) -> SecurityMode:
-    normalized = (value or "").strip().lower() or "magic"
-    try:
-        return SecurityMode(normalized)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail="security_mode must be 'vault' or 'magic'",
-        ) from exc
-
-
 def _validate_key_material(
-    *,
-    security_mode: SecurityMode,
     salt: str | None,
     public_key: str | None,
     encrypted_private_key: str | None,
-    raw_private_key: str | None,
 ) -> None:
-    if security_mode == SecurityMode.VAULT:
-        if not (salt and public_key and encrypted_private_key):
-            raise HTTPException(
-                status_code=400,
-                detail="Vault Mode requires salt, public_key, and encrypted_private_key",
-            )
-        if raw_private_key:
-            raise HTTPException(
-                status_code=400,
-                detail="Vault Mode must not send raw_private_key",
-            )
-        return
-
-    if not (public_key and raw_private_key):
+    if not (salt and public_key and encrypted_private_key):
         raise HTTPException(
             status_code=400,
-            detail="Magic Mode requires public_key and raw_private_key",
-        )
-    if salt or encrypted_private_key:
-        raise HTTPException(
-            status_code=400,
-            detail="Magic Mode should not send salt or encrypted_private_key",
+            detail="This application requires salt, public_key, and encrypted_private_key.",
         )
 
 
@@ -198,27 +165,36 @@ def _safe_user_salt(user: User) -> str | None:
         return None
 
 
+def _user_with_key_material_stmt(email: str):
+    return (
+        select(User)
+        .options(
+            undefer(User.public_key),
+            undefer(User.salt),
+            undefer(User.encrypted_private_key),
+        )
+        .where(User.email == email)
+    )
+
+
 @router.post("/signup")
 async def sign_up(body: SignUpBody, request: Request):
     email = _normalize_email(body.email)
     password = body.password
     full_name = (body.full_name or "").strip() or None
-    security_mode = _parse_security_mode(body.security_mode)
 
     if not email:
         raise HTTPException(status_code=400, detail="Email is required")
     _validate_password(password)
     _validate_key_material(
-        security_mode=security_mode,
         salt=body.salt,
         public_key=body.public_key,
         encrypted_private_key=body.encrypted_private_key,
-        raw_private_key=body.raw_private_key,
     )
 
     async_session = request.app.state.async_session
     async with async_session() as session:
-        result = await session.execute(select(User).where(User.email == email))
+        result = await session.execute(_user_with_key_material_stmt(email))
         user = result.scalar_one_or_none()
 
         if user and user.password_hash:
@@ -237,7 +213,7 @@ async def sign_up(body: SignUpBody, request: Request):
             # Legacy or malformed hash format: allow password re-initialization.
 
         if user is None:
-            user = User(email=email, full_name=full_name, security_mode=security_mode)
+            user = User(email=email, full_name=full_name, security_mode=SecurityMode.VAULT)
             session.add(user)
             await session.flush()
         else:
@@ -245,18 +221,11 @@ async def sign_up(body: SignUpBody, request: Request):
                 user.full_name = full_name
 
         user.password_hash = hash_password(password)
-        user.security_mode = security_mode
+        user.security_mode = SecurityMode.VAULT
         user.public_key = body.public_key
-        if security_mode == SecurityMode.VAULT:
-            user.salt = body.salt
-            user.encrypted_private_key = body.encrypted_private_key
-            user.server_encrypted_private_key = None
-        else:
-            raw_private_key = body.raw_private_key or ""
-            user.salt = None
-            user.encrypted_private_key = None
-            user.server_encrypted_private_key = encrypt(str(user.id), raw_private_key)
-            raw_private_key = ""
+        user.salt = body.salt
+        user.encrypted_private_key = body.encrypted_private_key
+        user.server_encrypted_private_key = None
         await session.commit()
         await session.refresh(user)
 
@@ -275,23 +244,34 @@ async def key_salt(email: str, request: Request):
 
     async_session = request.app.state.async_session
     async with async_session() as session:
-        result = await session.execute(select(User).where(User.email == normalized_email))
+        result = await session.execute(_user_with_key_material_stmt(normalized_email))
         user = result.scalar_one_or_none()
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if user.security_mode == SecurityMode.MAGIC:
-        raise HTTPException(
-            status_code=409,
-            detail="Magic Mode accounts do not use password-derived key wrapping.",
-        )
     user_salt = _safe_user_salt(user)
     if not user_salt:
         raise HTTPException(
             status_code=409,
-            detail="Account is missing E2EE key material. Re-run Sign Up with the same email to initialize it.",
+            detail="Account is missing E2EE key material. Re-run Sign Up with the same email to initialize a vault key.",
         )
     return {"salt": user_salt}
+
+
+@router.get("/key-material")
+async def key_material(request: Request):
+    user = await require_current_user(request)
+    user_salt = _safe_user_salt(user)
+    encrypted_private_key = _safe_encrypted_private_key(user)
+    if not user_salt or not encrypted_private_key:
+        raise HTTPException(
+            status_code=409,
+            detail="Account is missing E2EE key material. Re-run Sign Up with the same email to initialize a vault key.",
+        )
+    return {
+        "salt": user_salt,
+        "encrypted_private_key": encrypted_private_key,
+    }
 
 
 @router.post("/signin")
@@ -307,7 +287,7 @@ async def sign_in(body: SignInBody, request: Request):
     async_session = request.app.state.async_session
     try:
         async with async_session() as session:
-            result = await session.execute(select(User).where(User.email == email))
+            result = await session.execute(_user_with_key_material_stmt(email))
             user = result.scalar_one_or_none()
     except Exception:
         logger.exception("[auth.signin] database lookup failed email=%s", email)

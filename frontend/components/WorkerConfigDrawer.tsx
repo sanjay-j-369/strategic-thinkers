@@ -19,11 +19,10 @@ export interface WorkerItem {
   name: string;
   description: string;
   status: string;
-  security_mode: "vault" | "magic";
+  security_mode: "vault";
   config: {
     monitor_targets?: string;
     auto_draft_replies?: boolean;
-    daily_digest_emails?: boolean;
     custom_instructions?: string;
   };
   live_status: string;
@@ -47,13 +46,11 @@ export function WorkerConfigDrawer({
 }: WorkerConfigDrawerProps) {
   const [monitorTargets, setMonitorTargets] = useState("");
   const [autoDraftReplies, setAutoDraftReplies] = useState(false);
-  const [dailyDigestEmails, setDailyDigestEmails] = useState(false);
   const [customInstructions, setCustomInstructions] = useState("");
 
   useEffect(() => {
     setMonitorTargets(worker?.config.monitor_targets || "");
     setAutoDraftReplies(Boolean(worker?.config.auto_draft_replies));
-    setDailyDigestEmails(Boolean(worker?.config.daily_digest_emails));
     setCustomInstructions(worker?.config.custom_instructions || "");
   }, [worker]);
 
@@ -63,7 +60,6 @@ export function WorkerConfigDrawer({
       await onSave(worker.worker_key, {
         monitor_targets: monitorTargets,
         auto_draft_replies: autoDraftReplies,
-        daily_digest_emails: dailyDigestEmails,
         custom_instructions: customInstructions,
       });
     } catch {
@@ -82,7 +78,7 @@ export function WorkerConfigDrawer({
             {worker?.name || "Worker"}
           </DialogTitle>
           <DialogDescription className="max-w-md text-sm leading-7 text-neutral-600">
-            Set the channels, labels, and operating instructions this worker should follow in the background.
+            Set the channels, labels, and operating instructions this worker should follow before surfacing founder-reviewed drafts.
           </DialogDescription>
         </DialogHeader>
 
@@ -123,39 +119,6 @@ export function WorkerConfigDrawer({
                 Auto-draft replies
               </button>
             </div>
-          </div>
-
-          <div className="grid gap-3">
-            <label className="text-[11px] font-semibold uppercase tracking-[0.22em] text-neutral-500">
-              Daily GTM digest emails
-            </label>
-            <div className="grid grid-cols-2 gap-0 border border-neutral-300">
-              <button
-                type="button"
-                onClick={() => worker?.security_mode === "magic" && setDailyDigestEmails(true)}
-                disabled={worker?.security_mode !== "magic"}
-                className={`h-12 text-xs font-semibold uppercase tracking-[0.18em] ${
-                  dailyDigestEmails ? "bg-black text-white" : "bg-white text-black"
-                } ${worker?.security_mode !== "magic" ? "opacity-40" : ""}`}
-              >
-                Enabled
-              </button>
-              <button
-                type="button"
-                onClick={() => worker?.security_mode === "magic" && setDailyDigestEmails(false)}
-                disabled={worker?.security_mode !== "magic"}
-                className={`h-12 border-l border-neutral-300 text-xs font-semibold uppercase tracking-[0.18em] ${
-                  !dailyDigestEmails ? "bg-black text-white" : "bg-white text-black"
-                } ${worker?.security_mode !== "magic" ? "opacity-40" : ""}`}
-              >
-                Disabled
-              </button>
-            </div>
-            {worker?.security_mode !== "magic" ? (
-              <p className="text-xs leading-6 text-neutral-500">
-                Daily digest emails are available only in Magic Mode.
-              </p>
-            ) : null}
           </div>
 
           <div className="grid gap-3">

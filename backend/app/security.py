@@ -9,6 +9,7 @@ import uuid
 
 from fastapi import HTTPException, Request
 from sqlalchemy import select
+from sqlalchemy.orm import undefer
 
 from app.config import settings
 from app.models.user import User
@@ -117,20 +118,11 @@ def user_public_dict(user: User) -> dict:
     except Exception:
         public_key = None
 
-    try:
-        security_mode = (
-            user.security_mode.value
-            if hasattr(user.security_mode, "value")
-            else str(user.security_mode)
-        )
-    except Exception:
-        security_mode = "magic"
-
     return {
         "id": str(user.id),
         "email": user.email,
         "full_name": user.full_name,
-        "security_mode": security_mode,
+        "security_mode": "vault",
         "public_key": public_key,
         "created_at": user.created_at.isoformat(),
         "google_connected": bool(user.google_token),
@@ -181,7 +173,15 @@ async def get_optional_current_user(request: Request) -> User | None:
 
     async_session = request.app.state.async_session
     async with async_session() as session:
-        result = await session.execute(select(User).where(User.id == uuid.UUID(user_id)))
+        result = await session.execute(
+            select(User)
+            .options(
+                undefer(User.public_key),
+                undefer(User.salt),
+                undefer(User.encrypted_private_key),
+            )
+            .where(User.id == uuid.UUID(user_id))
+        )
         return result.scalar_one_or_none()
 
 

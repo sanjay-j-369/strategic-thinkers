@@ -22,7 +22,6 @@ import { apiFetch } from "@/lib/api";
 import {
   deriveMasterKey,
   exportPublicKeyPem,
-  exportPrivateKeyPem,
   generateKeyPair,
   generateSalt,
   unwrapPrivateKey,
@@ -37,7 +36,6 @@ export default function SignUpPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [securityMode, setSecurityMode] = useState<"magic" | "vault">("magic");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,17 +59,9 @@ export default function SignUpPage() {
     try {
       const keyPair = await generateKeyPair();
       const publicKey = await exportPublicKeyPem(keyPair.publicKey);
-      let salt: string | undefined;
-      let encryptedPrivateKey: string | undefined;
-      let rawPrivateKey: string | undefined;
-
-      if (securityMode === "vault") {
-        salt = generateSalt();
-        const masterKey = await deriveMasterKey(password, salt);
-        encryptedPrivateKey = await wrapPrivateKey(keyPair.privateKey, masterKey);
-      } else {
-        rawPrivateKey = await exportPrivateKeyPem(keyPair.privateKey);
-      }
+      const salt = generateSalt();
+      const masterKey = await deriveMasterKey(password, salt);
+      const encryptedPrivateKey = await wrapPrivateKey(keyPair.privateKey, masterKey);
 
       const data = await apiFetch<{
         token: string;
@@ -83,24 +73,20 @@ export default function SignUpPage() {
           full_name: fullName,
           email,
           password,
-          security_mode: securityMode,
           salt,
           public_key: publicKey,
           encrypted_private_key: encryptedPrivateKey,
-          raw_private_key: rawPrivateKey,
         },
       });
-      if (securityMode === "vault" && data.encrypted_private_key === encryptedPrivateKey) {
+      if (data.encrypted_private_key === encryptedPrivateKey) {
         setPrivateKey(keyPair.privateKey);
-      } else if (securityMode === "vault" && data.encrypted_private_key && salt) {
+      } else if (data.encrypted_private_key) {
         const masterKey = await deriveMasterKey(password, salt);
         const restoredPrivateKey = await unwrapPrivateKey(
           data.encrypted_private_key,
           masterKey
         );
         setPrivateKey(restoredPrivateKey);
-      } else {
-        setPrivateKey(keyPair.privateKey);
       }
       setSession(data.token, data.user);
       router.replace(redirectTo);
@@ -174,39 +160,13 @@ export default function SignUpPage() {
                 required
               />
             </div>
-
-            <div className="space-y-3">
-              <Label>Security Mode</Label>
-              <div className="grid gap-0 border border-neutral-300 md:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => setSecurityMode("magic")}
-                  className={`grid gap-2 px-4 py-4 text-left ${
-                    securityMode === "magic" ? "bg-black text-white" : "bg-white text-black"
-                  }`}
-                >
-                  <span className="text-xs font-black uppercase tracking-[0.18em]">
-                    Magic Mode (Recommended)
-                  </span>
-                  <span className="text-sm leading-6 opacity-80">
-                    Allow Founder OS to draft emails and send background reports 24/7.
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSecurityMode("vault")}
-                  className={`grid gap-2 border-t border-neutral-300 px-4 py-4 text-left md:border-l md:border-t-0 ${
-                    securityMode === "vault" ? "bg-black text-white" : "bg-white text-black"
-                  }`}
-                >
-                  <span className="text-xs font-black uppercase tracking-[0.18em]">
-                    Vault Mode
-                  </span>
-                  <span className="text-sm leading-6 opacity-80">
-                    Maximum security. Founder OS cannot read data offline. You must open the app to sync drafts.
-                  </span>
-                </button>
-              </div>
+            <div className="border border-neutral-300 px-4 py-4">
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-neutral-500">
+                End-to-end encrypted by default
+              </p>
+              <p className="mt-3 text-sm leading-7 text-neutral-700">
+                Founder OS stores only your client-wrapped private key. Background systems can prepare drafts, but only you can open the workspace and explicitly send them.
+              </p>
             </div>
 
             {error ? (

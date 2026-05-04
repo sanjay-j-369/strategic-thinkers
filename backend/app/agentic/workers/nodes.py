@@ -75,22 +75,14 @@ def compose_operator_alert(state: WorkerState) -> WorkerState:
     if not state.get("blockers") and "no strong blocker" in state.get("blocker_summary", "").lower():
         return {**state, "notification": None}
 
-    security_mode = state.get("security_mode", "magic")
-    digest_enabled = bool(state.get("config", {}).get("daily_digest_emails", True))
+    security_mode = "vault"
     title = f"{state['worker_name']} surfaced GTM actions"
     body = state.get("blocker_summary", "").strip()
-    if security_mode == "magic":
-        body = (
-            f"{body}\n\nMagic Mode active. Founder OS can draft contextual follow-ups "
-            f"and {'send' if digest_enabled else 'skip'} daily GTM digests."
-        )
-        notification_type = "GTM_DAILY_DIGEST"
-    else:
-        body = (
-            f"{body}\n\nVault Mode active. Founder OS will save a UUID-based skeleton draft "
-            "until the founder opens the app and resolves private context."
-        )
-        notification_type = "GTM_SKELETON_DRAFT"
+    body = (
+        f"{body}\n\nVault mode is active. Founder OS will save a local draft "
+        "until the founder opens the app and explicitly sends it."
+    )
+    notification_type = "GTM_SKELETON_DRAFT"
     notification = {
         "notification_type": notification_type,
         "severity": "warning",
@@ -103,7 +95,6 @@ def compose_operator_alert(state: WorkerState) -> WorkerState:
             "lane": state["lane"],
             "tags": state["tags"],
             "monitor_targets": state.get("config", {}).get("monitor_targets"),
-            "daily_digest_emails": digest_enabled,
             "context_count": len(state.get("context_items", [])),
         },
     }

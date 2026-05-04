@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Lock, Sparkles } from "lucide-react";
+import { ArrowUpRight, Lock } from "lucide-react";
 
 import { WorkerConfigDrawer, type WorkerItem } from "@/components/WorkerConfigDrawer";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -120,7 +120,7 @@ export function WorkerDirectory() {
               Configure the GTM agent.
             </h1>
             <p className="mt-4 max-w-3xl text-base leading-8 text-neutral-600">
-              Founder OS now runs a strategic GTM pillar instead of generic tools. Its behavior changes based on your selected security mode.
+              Founder OS runs a strategic GTM pillar that prepares founder-reviewed drafts inside your encrypted workspace.
             </p>
           </div>
           <div className="grid gap-3 lg:col-span-4 lg:justify-self-end">
@@ -131,8 +131,8 @@ export function WorkerDirectory() {
             <div className="border border-neutral-300 px-5 py-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-neutral-500">Security mode</p>
               <p className="mt-3 inline-flex items-center gap-2 text-sm font-black uppercase tracking-[0.14em] text-black">
-                {user?.security_mode === "vault" ? <Lock className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
-                {user?.security_mode === "vault" ? "Vault Mode" : "Magic Mode"}
+                <Lock className="h-4 w-4" />
+                End-to-end encrypted
               </p>
             </div>
           </div>
@@ -177,7 +177,7 @@ export function WorkerDirectory() {
                     </div>
                     <p className="text-sm text-black">{worker.config.monitor_targets || "Not set"}</p>
                     <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">
-                      Digest emails: {worker.config.daily_digest_emails ? "On" : "Off"}
+                      Founder review required before send
                     </p>
                   </div>
                 </div>

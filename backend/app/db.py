@@ -17,7 +17,7 @@ COMPATIBILITY_DDL = [
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS public_key TEXT",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS encrypted_private_key TEXT",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS server_encrypted_private_key TEXT",
-    "ALTER TABLE users ADD COLUMN IF NOT EXISTS security_mode VARCHAR(24) DEFAULT 'magic' NOT NULL",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS security_mode VARCHAR(24) DEFAULT 'vault' NOT NULL",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS google_last_synced_at TIMESTAMP WITH TIME ZONE",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS slack_last_synced_at TIMESTAMP WITH TIME ZONE",
     "ALTER TABLE summaries ADD COLUMN IF NOT EXISTS source_ref VARCHAR(255)",

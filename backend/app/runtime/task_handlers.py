@@ -164,7 +164,7 @@ async def mentor_handler(app: FastAPI, payload: dict) -> dict:
                 subject="Mentor weekly memo",
                 body=result.get("memo", "No critical strategic alerts."),
                 recipient_hint=security["email"],
-                send_transactional=security["security_mode"] == "magic",
+                send_transactional=False,
             )
             notifications = [
                 save_notification(

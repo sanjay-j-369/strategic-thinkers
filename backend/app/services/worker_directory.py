@@ -25,13 +25,12 @@ WORKER_CATALOG: tuple[WorkerCatalogItem, ...] = (
     WorkerCatalogItem(
         key="gtm-agent",
         name="GTM Agent",
-        description="Monitors sales and customer signals, drafts follow-ups, and compiles a GTM digest based on your selected security mode.",
+        description="Monitors sales and customer signals and prepares founder-reviewed follow-ups inside the encrypted workspace.",
         lane="gtm",
         tags=("customer", "support", "gtm", "slack", "email", "revenue"),
         default_config={
             "monitor_targets": "#sales,#customers,investors",
             "auto_draft_replies": True,
-            "daily_digest_emails": True,
             "custom_instructions": "Prioritize revenue-moving follow-ups, churn risk, investor asks, and stalled pipeline conversations.",
         },
     ),

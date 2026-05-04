@@ -27,7 +27,7 @@ class User(Base):
             values_callable=lambda enum_cls: [item.value for item in enum_cls],
         ),
         nullable=False,
-        default=SecurityMode.MAGIC,
+        default=SecurityMode.VAULT,
     )
     password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     google_token: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -57,7 +57,7 @@ class User(Base):
             "id": str(self.id),
             "email": self.email,
             "full_name": self.full_name,
-            "security_mode": self.security_mode.value,
+            "security_mode": SecurityMode.VAULT.value,
             "google_connected": bool(self.google_token),
             "slack_connected": bool(self.slack_token),
             "google_last_synced_at": self.google_last_synced_at.isoformat()

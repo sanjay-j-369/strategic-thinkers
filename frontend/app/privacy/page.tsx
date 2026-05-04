@@ -23,9 +23,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
-import { decryptArchiveContent, decryptPIIMapping } from "@/lib/crypto";
+import {
+  decryptArchiveContent,
+  decryptPIIMapping,
+  deriveMasterKey,
+  unwrapPrivateKey,
+} from "@/lib/crypto";
 import { useRequireAuth } from "@/lib/use-require-auth";
 
 interface ArchiveItem {
@@ -46,7 +53,7 @@ interface ArchiveViewResponse {
 }
 
 export default function PrivacyPage() {
-  const { ready, token, privateKey } = useRequireAuth();
+  const { ready, token, privateKey, setPrivateKey } = useRequireAuth();
   const [items, setItems] = useState<ArchiveItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -57,8 +64,12 @@ export default function PrivacyPage() {
   const [viewContent, setViewContent] = useState("");
   const [piiTokens, setPiiTokens] = useState<string[]>([]);
   const [viewItem, setViewItem] = useState<ArchiveItem | null>(null);
+  const [viewRequiresUnlock, setViewRequiresUnlock] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ArchiveItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [unlockOpen, setUnlockOpen] = useState(false);
+  const [unlockPassword, setUnlockPassword] = useState("");
+  const [unlocking, setUnlocking] = useState(false);
   const PAGE_SIZE = 20;
 
   const fetchItems = useCallback(async () => {
@@ -95,12 +106,14 @@ export default function PrivacyPage() {
     setPiiTokens([]);
     setViewOpen(true);
     setViewLoading(true);
+    setViewRequiresUnlock(false);
 
     try {
       const data = await apiFetch<ArchiveViewResponse>(`/api/archive/${item.id}`, {
         token,
       });
       const redactedContent = data.content_redacted || data.content || "No content available";
+      setViewContent(redactedContent);
       const contentEncryptionScheme = data.content_encryption_scheme || "fernet";
       const scheme = data.pii_mapping_scheme || {};
       const encrypted = data.pii_mapping_enc || {};
@@ -110,12 +123,18 @@ export default function PrivacyPage() {
 
       if (contentEncryptionScheme === "rsa_aes_gcm" && data.content_enc) {
         if (!privateKey) {
-          throw new Error("Private key unavailable in memory. Sign in again to unlock content.");
+          setViewRequiresUnlock(true);
+          setNotice("Unlock the encrypted workspace to see original archived content.");
+          setPiiTokens(data.pii_tokens || []);
+          return;
         }
         setViewContent(await decryptArchiveContent(data.content_enc, privateKey));
       } else if (Object.keys(rsaMapping).length > 0) {
         if (!privateKey) {
-          throw new Error("Private key unavailable in memory. Sign in again to unlock content.");
+          setViewRequiresUnlock(true);
+          setNotice("Unlock the encrypted workspace to restore private names in this archive entry.");
+          setPiiTokens(data.pii_tokens || []);
+          return;
         }
         const decryptedMapping = await decryptPIIMapping(rsaMapping, privateKey);
         let reconstructed = redactedContent;
@@ -129,12 +148,40 @@ export default function PrivacyPage() {
       }
       setPiiTokens(data.pii_tokens || []);
     } catch (err) {
-      setViewContent("Unable to load archived content.");
+      setViewContent((current) => current || "Unable to load archived content.");
       if (err instanceof Error) {
         setNotice(err.message);
       }
     } finally {
       setViewLoading(false);
+    }
+  }
+
+  async function handleUnlockWorkspace() {
+    if (!token) return;
+    setUnlocking(true);
+    setNotice(null);
+    try {
+      const data = await apiFetch<{
+        salt: string;
+        encrypted_private_key: string;
+      }>("/api/auth/key-material", { token });
+      const masterKey = await deriveMasterKey(unlockPassword, data.salt);
+      const restoredPrivateKey = await unwrapPrivateKey(
+        data.encrypted_private_key,
+        masterKey
+      );
+      setPrivateKey(restoredPrivateKey);
+      setUnlockOpen(false);
+      setUnlockPassword("");
+      setNotice("Encrypted workspace unlocked in this session.");
+      if (viewItem) {
+        await handleView(viewItem);
+      }
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Failed to unlock encrypted workspace.");
+    } finally {
+      setUnlocking(false);
     }
   }
 
@@ -275,10 +322,29 @@ export default function PrivacyPage() {
               <span className="live-dot" />
               Client-decrypted view
             </div>
-            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-              If placeholders remain, the stored source content was already sanitized before archival.
-            </p>
+            <div className="flex items-center gap-3">
+              {viewRequiresUnlock ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setUnlockOpen(true)}
+                >
+                  Unlock Workspace
+                </Button>
+              ) : null}
+              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                If placeholders remain, the stored source content was already sanitized before archival.
+              </p>
+            </div>
           </div>
+          {viewRequiresUnlock ? (
+            <Alert variant="info">
+              <AlertTitle>Workspace locked</AlertTitle>
+              <AlertDescription>
+                Showing the redacted archive copy. Unlock the encrypted workspace in this session to view original private content.
+              </AlertDescription>
+            </Alert>
+          ) : null}
           <div className="max-h-[60vh] overflow-y-auto rounded-[1.2rem] border border-border/70 bg-background p-5 shadow-inner">
             {viewLoading ? (
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
@@ -295,6 +361,35 @@ export default function PrivacyPage() {
           <DialogFooter>
             <Button variant="secondary" onClick={() => setViewOpen(false)}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={unlockOpen} onOpenChange={setUnlockOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unlock encrypted workspace</DialogTitle>
+            <DialogDescription>
+              Enter your account password to derive the vault key locally and decrypt archived content in this browser session.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <Label htmlFor="workspace-password">Password</Label>
+            <Input
+              id="workspace-password"
+              type="password"
+              value={unlockPassword}
+              onChange={(event) => setUnlockPassword(event.target.value)}
+              placeholder="Enter your password"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setUnlockOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void handleUnlockWorkspace()} disabled={unlocking || !unlockPassword}>
+              {unlocking ? "Unlocking..." : "Unlock"}
             </Button>
           </DialogFooter>
         </DialogContent>
