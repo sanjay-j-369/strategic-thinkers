@@ -23,7 +23,7 @@ from app.demo.persona import enqueue_demo_history, ensure_demo_persona, get_demo
 from app.ingestion.gmail import GmailWorker
 from app.ingestion.slack import SlackWorker
 from app.models.user import SecurityMode, User
-from app.pipeline.encryption import decrypt
+from app.pipeline.encryption import decrypt, encrypt
 from app.security import (
     create_access_token,
     hash_password,

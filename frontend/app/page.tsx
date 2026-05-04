@@ -109,7 +109,7 @@ interface ActionItem {
 function compactText(value?: string, maxLength = 240) {
   const text = (value || "")
     .replace(/\*\*/g, "")
-    .replace(/Vault mode is active\..*$/is, "")
+    .replace(/Vault mode is active\.[\s\S]*$/i, "")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -119,7 +119,7 @@ function compactText(value?: string, maxLength = 240) {
 
 function markdownDetail(value?: string) {
   return (value || "")
-    .replace(/Vault mode is active\..*$/is, "")
+    .replace(/Vault mode is active\.[\s\S]*$/i, "")
     .replace(/:\s+\*\s+/g, ":\n\n* ")
     .replace(/\s+\*\s+/g, "\n* ")
     .replace(/\s+(\d+\.\s+)/g, "\n$1")

@@ -22,7 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const navigation = [
-  { href: "/", label: "Pulse" },
+  { href: "/", label: "Feed" },
   { href: "/guide", label: "Mentor" },
   { href: "/ingest", label: "Inputs" },
   { href: "/workers", label: "Workers" },
