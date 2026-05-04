@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   Activity,
+  Calendar,
   TerminalSquare,
   X,
 } from "lucide-react";
@@ -19,7 +20,7 @@ const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 export function DemoControls({ inline = false }: { inline?: boolean }) {
   const { token, user } = useAuth();
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState<"scenario" | null>(null);
+  const [busy, setBusy] = useState<"scenario" | "meeting" | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [targetUserId, setTargetUserId] = useState("");
@@ -94,6 +95,29 @@ export function DemoControls({ inline = false }: { inline?: boolean }) {
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Scenario trigger failed.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function triggerMeetingPrep() {
+    if (!DEMO_MODE || !token || !targetUserId.trim()) return;
+    setBusy("meeting");
+    setError(null);
+    setStatus(null);
+    try {
+      await apiFetch("/api/meetings", {
+        method: "POST",
+        token,
+        json: {
+          user_id: targetUserId.trim(),
+          topic: "Executive Briefing with Enterprise Customer",
+          attendees: ["sarah.kim@investor.com", "marcus@client-co.com"],
+        },
+      });
+      setStatus("Meeting prep card will be generated shortly.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to trigger meeting prep.");
     } finally {
       setBusy(null);
     }
@@ -201,6 +225,28 @@ export function DemoControls({ inline = false }: { inline?: boolean }) {
                   </div>
                 </div>
               ) : null}
+
+              <div className="grid gap-3 border border-border px-4 py-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-foreground/50">
+                  Meeting Prep
+                </p>
+                <Button
+                  className="h-auto w-full justify-between rounded-none px-4 py-4"
+                  disabled={busy !== null || !targetUserId.trim()}
+                  variant="outline"
+                  onClick={() => void triggerMeetingPrep()}
+                >
+                  <span className="grid text-left">
+                    <span className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em]">
+                      <Calendar className="h-4 w-4" />
+                      Trigger Meeting Prep
+                    </span>
+                    <span className="mt-1 text-[11px] font-medium normal-case tracking-normal opacity-70">
+                      Generate prep card for Executive Briefing
+                    </span>
+                  </span>
+                </Button>
+              </div>
 
               {status ? (
                 <div className="border border-border bg-background px-4 py-3 text-sm text-foreground/70">{status}</div>

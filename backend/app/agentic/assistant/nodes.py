@@ -51,7 +51,7 @@ def extract_commitments(state: AssistantState) -> AssistantState:
         lowered = text.lower()
         if not any(re.search(pattern, lowered, flags=re.IGNORECASE) for pattern in PROMISE_PATTERNS):
             continue
-        sentence = text.replace("\n", " ").strip()[:220]
+        sentence = text.replace("\n", " ").strip()[:500]
         promises.append(
             {
                 "source_ref": item.get("id"),
@@ -108,7 +108,7 @@ def detect_vip_interruptions(state: AssistantState) -> AssistantState:
                 "notification_type": "VIP_INTERRUPT",
                 "severity": "critical",
                 "title": "VIP outreach needs attention",
-                "body": text[:240],
+                "body": text[:500],
                 "payload": {"source_ref": item.get("id"), "source": item.get("source")},
             }
         )
@@ -168,7 +168,7 @@ def compose_assistant_outputs(state: AssistantState) -> AssistantState:
     snippets = []
     for item in state.get("recent_items", [])[:8]:
         tags = ", ".join(item.get("context_tags") or [])
-        snippets.append(f"[{item.get('source')}] ({tags}) {item.get('text', '')[:220]}")
+        snippets.append(f"[{item.get('source')}] ({tags}) {item.get('text', '')[:500]}")
 
     fallback_brief = "Overnight activity was light. No major issues surfaced."
     if snippets:
@@ -177,7 +177,7 @@ def compose_assistant_outputs(state: AssistantState) -> AssistantState:
         "Turn these founder communications into a prioritized morning briefing with clear urgency cues:\n\n"
         + "\n---\n".join(snippets),
         fallback=fallback_brief,
-        max_tokens=260,
+        max_tokens=800,
     )
 
     notifications = list(state.get("vip_alerts", []))
@@ -232,7 +232,7 @@ def compose_assistant_outputs(state: AssistantState) -> AssistantState:
                 "notification_type": "INGESTION_WATCH_UPDATE",
                 "severity": "info",
                 "title": "New context processed",
-                "body": (briefing.strip() or fallback_brief)[:320],
+                "body": (briefing.strip() or fallback_brief)[:2000],
                 "payload": {
                     "promise_count": len(state.get("promises", [])),
                     "draft_count": len(state.get("drafts", [])),

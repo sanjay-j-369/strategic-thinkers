@@ -15,6 +15,7 @@ class ChatRequest(BaseModel):
     user_id: str | None = None
     message: str
     history: list[dict] = []
+    system_prompt: str | None = None
 
 
 @router.post("")
@@ -24,7 +25,7 @@ async def chat(body: ChatRequest, request: Request):
 
     context = _get_context(str(user.id), body.message)
 
-    system_prompt = f"""You are a strategic AI advisor for founders.
+    system_content = body.system_prompt or f"""You are a strategic AI advisor for founders.
 You have direct access to the founder's recent emails and Slack messages shown below.
 Answer questions specifically based on this data. Quote relevant parts when useful.
 If asked about a specific email or message, find it in the context and summarize it.
@@ -35,7 +36,7 @@ FOUNDER'S EMAILS & SLACK MESSAGES:
 
 Be direct and specific. Reference actual content and tokens from the messages above."""
 
-    messages = [{"role": "system", "content": system_prompt}]
+    messages = [{"role": "system", "content": system_content}]
     messages += body.history[-10:]
     messages.append({"role": "user", "content": body.message})
 

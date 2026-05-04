@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -35,6 +36,7 @@ export default function SignUpPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,18 +79,8 @@ export default function SignUpPage() {
           encrypted_private_key: encryptedPrivateKey,
         },
       });
-      if (data.encrypted_private_key === encryptedPrivateKey) {
-        setPrivateKey(keyPair.privateKey);
-      } else if (data.encrypted_private_key) {
-        const masterKey = await deriveMasterKey(password, salt);
-        const restoredPrivateKey = await unwrapPrivateKey(
-          data.encrypted_private_key,
-          masterKey
-        );
-        setPrivateKey(restoredPrivateKey);
-      }
       setSession(data.token, data.user);
-      router.replace(redirectTo);
+      router.replace("/sign-in");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign up failed.");
     } finally {
@@ -149,13 +141,24 @@ export default function SignUpPage() {
             </div>
             <div className="space-y-2">
               <Label>Password</Label>
-              <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 8 characters"
-                required
-              />
+              <div className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="At least 8 characters"
+                  required
+                  className="pr-12"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
             </div>
             <div className="rounded-xl surface-high px-5 py-4">
               <p className="text-xs font-medium uppercase tracking-wider text-on-surface-variant">

@@ -2,13 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { AlertTriangle, Send, Sparkles, TimerReset } from "lucide-react";
+import { AlertTriangle, MessageSquare, Send, Sparkles, TimerReset } from "lucide-react";
 
+import { MentorChat } from "@/components/MentorChat";
 import { SignalCard, type SignalItem } from "@/components/SignalCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/api";
 import { useRequireAuth } from "@/lib/use-require-auth";
@@ -26,6 +28,7 @@ export default function GuidePage() {
   const [question, setQuestion] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("async");
   const [runs, setRuns] = useState<any[]>([]);
   const signals = useFounderFeed(user?.id ?? "", token);
 
@@ -119,44 +122,63 @@ export default function GuidePage() {
         </Card>
 
         <Card className="border border-border bg-card  bg-card">
-          <CardHeader>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="space-y-2">
-                <Badge variant="outline">Async queue</Badge>
-                <CardTitle className="font-sans text-4xl font-black uppercase tracking-[-0.05em]">Ask the mentor</CardTitle>
-                <CardDescription className="max-w-3xl text-base leading-7 text-foreground/70">
-                  Your question is pushed into the backend queue, reasoned on in the background, and delivered back into the notification feed.
-                </CardDescription>
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v)} className="w-full">
+            <CardHeader className="pb-0">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="space-y-2">
+                  <Badge variant="outline">Mentor</Badge>
+                  <CardTitle className="font-sans text-4xl font-black uppercase tracking-[-0.05em]">Ask the mentor</CardTitle>
+                </div>
+                <TabsList className="grid w-auto grid-cols-2">
+                  <TabsTrigger value="async">
+                    <TimerReset className="h-4 w-4 mr-1" />
+                    Async
+                  </TabsTrigger>
+                  <TabsTrigger value="chat">
+                    <MessageSquare className="h-4 w-4 mr-1" />
+                    Live Chat
+                  </TabsTrigger>
+                </TabsList>
               </div>
-              <div className="border border-border px-4 py-4  bg-background">
-                <p className="mono-label text-foreground/50">Recent runs</p>
-                <p className="mt-2 text-3xl font-black text-foreground">{runs.length}</p>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Textarea
-              value={question}
-              onChange={(event) => setQuestion(event.target.value)}
-              placeholder="What strategic issue should the board member analyze next?"
-              className="min-h-[170px]"
-            />
-            <div className="flex flex-wrap items-center gap-3">
-              <Button size="lg" onClick={() => void submit()} disabled={submitting || !question.trim()}>
-                <Send className="h-4 w-4" />
-                {submitting ? "Queueing..." : "Queue Analysis"}
-              </Button>
-              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-foreground/55">
-                <TimerReset className="h-4 w-4" />
-                Delivered through notifications
-              </div>
-            </div>
-            {status ? (
-              <div className="border border-border px-4 py-4  bg-background">
-                <p className="text-sm leading-7 text-foreground/75">{status}</p>
-              </div>
-            ) : null}
-          </CardContent>
+              <CardDescription className="max-w-3xl text-base leading-7 text-foreground/70 pt-2">
+                Async pushes to background queue. Live chat gets instant responses.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-4 pt-6">
+              <TabsContent value="async" className="space-y-4 mt-0">
+                <Textarea
+                  value={question}
+                  onChange={(event) => setQuestion(event.target.value)}
+                  placeholder="What strategic issue should the board member analyze next?"
+                  className="min-h-[170px]"
+                />
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button size="lg" onClick={() => void submit()} disabled={submitting || !question.trim()}>
+                    <Send className="h-4 w-4" />
+                    {submitting ? "Queueing..." : "Queue Analysis"}
+                  </Button>
+                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-foreground/55">
+                    <TimerReset className="h-4 w-4" />
+                    Delivered through notifications
+                  </div>
+                </div>
+                {status ? (
+                  <div className="border border-border px-4 py-4  bg-background">
+                    <p className="text-sm leading-7 text-foreground/75">{status}</p>
+                  </div>
+                ) : null}
+              </TabsContent>
+              <TabsContent value="chat" className="mt-0">
+                <MentorChat
+                  token={token || ""}
+                  title="Board Member"
+                  subtitle="Ask anything about your startup strategy"
+                  placeholder="What's our biggest growth opportunity right now?"
+                />
+              </TabsContent>
+            </CardContent>
+          </Tabs>
         </Card>
       </section>
 
