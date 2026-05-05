@@ -1,12 +1,12 @@
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, BackgroundTasks, Request, Query
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Query
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy import select
 
 from app.runtime.task_names import TaskNames
-from app.security import resolve_user
+from app.security import require_current_user, resolve_user
 
 router = APIRouter(prefix="/api/meetings", tags=["meetings"])
 
@@ -122,3 +122,33 @@ async def list_meetings(
         })
 
     return {"meetings": meetings, "total": len(meetings)}
+
+
+@router.delete("/{meeting_id}")
+async def delete_meeting(meeting_id: str, request: Request):
+    from app.models.summary import Summary
+
+    user = await require_current_user(request)
+    try:
+        parsed_meeting_id = uuid.UUID(meeting_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid meeting id") from exc
+
+    async_session = request.app.state.async_session
+    async with async_session() as session:
+        meeting = (
+            await session.execute(
+                select(Summary).where(
+                    Summary.id == parsed_meeting_id,
+                    Summary.user_id == user.id,
+                    Summary.type == "MEETING",
+                )
+            )
+        ).scalar_one_or_none()
+        if not meeting:
+            raise HTTPException(status_code=404, detail="Meeting not found")
+
+        await session.delete(meeting)
+        await session.commit()
+
+    return {"status": "deleted", "id": meeting_id}

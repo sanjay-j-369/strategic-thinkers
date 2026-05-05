@@ -46,7 +46,7 @@ export function useFounderFeed(userId: string, token?: string | null) {
     async function loadSummaries() {
       try {
         const data = await apiFetch<{ items: SignalItem[] }>(
-          "/api/ops/notifications?limit=50",
+          "/api/ops/notifications?limit=50&unread_only=true",
           { token }
         );
         if (!mounted) return;

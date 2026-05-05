@@ -53,6 +53,7 @@ export default function MeetingsPage() {
   const [attendees, setAttendees] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [deletingMeetingId, setDeletingMeetingId] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -116,6 +117,26 @@ export default function MeetingsPage() {
       setError(err instanceof Error ? err.message : "Scheduling failed.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function deleteMeeting(meetingId: string) {
+    if (!token || deletingMeetingId) return;
+    setDeletingMeetingId(meetingId);
+    setSuccess(null);
+    setError(null);
+
+    try {
+      await apiFetch(`/api/meetings/${meetingId}`, {
+        method: "DELETE",
+        token,
+      });
+      setMeetings((current) => current.filter((meeting) => meeting.id !== meetingId));
+      setSuccess("Prep content removed.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed.");
+    } finally {
+      setDeletingMeetingId(null);
     }
   }
 
@@ -223,7 +244,11 @@ export default function MeetingsPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.25, delay: index * 0.03 }}
               >
-                <MeetingCard meeting={meeting} />
+                <MeetingCard
+                  meeting={meeting}
+                  onDelete={() => void deleteMeeting(meeting.id)}
+                  deleting={deletingMeetingId === meeting.id}
+                />
               </motion.div>
             ))}
           </div>
@@ -287,7 +312,15 @@ export default function MeetingsPage() {
   );
 }
 
-function MeetingCard({ meeting }: { meeting: Meeting }) {
+function MeetingCard({
+  meeting,
+  onDelete,
+  deleting,
+}: {
+  meeting: Meeting;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
   const date = new Date(meeting.scheduled_at);
   const isUpcoming = date > new Date();
   const meetLink = meeting.summary?.match(/Meet Link: (https?:\/\/[^\s]+)/)?.[1];
@@ -320,7 +353,19 @@ function MeetingCard({ meeting }: { meeting: Meeting }) {
 
             {summaryText ? (
               <div className="rounded-xl border border-border bg-card p-4">
-                <p className="mono-label mb-2">Prep Summary</p>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="mono-label">Prep Summary</p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={onDelete}
+                    disabled={deleting}
+                  >
+                    {deleting ? "Removing..." : "Delete"}
+                  </Button>
+                </div>
                 <p className="text-sm leading-7 text-muted-foreground">{summaryText}</p>
               </div>
             ) : null}

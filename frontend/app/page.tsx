@@ -223,6 +223,34 @@ export default function FeedPage() {
   const [expandedPromiseId, setExpandedPromiseId] = useState<string | null>(null);
   const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
   const logsViewportRef = useRef<HTMLDivElement | null>(null);
+  const completedActionsStorageKey = user?.id ? `feed-completed-actions:${user.id}` : null;
+  const [hydratedCompletedActionsKey, setHydratedCompletedActionsKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!completedActionsStorageKey) {
+      setCompletedActionIds(new Set());
+      setHydratedCompletedActionsKey(null);
+      return;
+    }
+
+    try {
+      const saved = window.localStorage.getItem(completedActionsStorageKey);
+      setCompletedActionIds(saved ? new Set(JSON.parse(saved) as string[]) : new Set());
+    } catch {
+      setCompletedActionIds(new Set());
+    }
+    setHydratedCompletedActionsKey(completedActionsStorageKey);
+  }, [completedActionsStorageKey]);
+
+  useEffect(() => {
+    if (!completedActionsStorageKey || hydratedCompletedActionsKey !== completedActionsStorageKey) return;
+
+    try {
+      window.localStorage.setItem(completedActionsStorageKey, JSON.stringify(Array.from(completedActionIds)));
+    } catch {
+      // Ignore local persistence failures.
+    }
+  }, [completedActionIds, completedActionsStorageKey, hydratedCompletedActionsKey]);
 
   useEffect(() => {
     if (!token || !isAuthenticated) return;
