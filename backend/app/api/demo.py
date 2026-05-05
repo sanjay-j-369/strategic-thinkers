@@ -8,9 +8,11 @@ from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
 from app.config import settings
 from app.demo.persona import enqueue_demo_history, ensure_demo_persona, get_demo_snapshot
+from app.models.startup_profile import StartupProfile
 from app.observability import emit_demo_log, emit_demo_log_async
 from app.pipeline.action_items import detect_action_item_signal
 from app.runtime.task_names import TaskNames
@@ -152,6 +154,52 @@ async def _enqueue_founder_event(request: Request, event: FounderEvent) -> str:
     return task_id
 
 
+async def _apply_startup_profile_event(request: Request, user_id: str, payload: dict) -> dict:
+    try:
+        parsed_user_id = uuid.UUID(user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid user_id") from exc
+
+    profile_payload = payload.get("profile") or payload
+    allowed_fields = {
+        "stage",
+        "mrr_usd",
+        "burn_rate_usd",
+        "runway_months",
+        "headcount",
+        "has_cto",
+        "dev_spend_pct",
+    }
+    updates = {key: profile_payload[key] for key in allowed_fields if key in profile_payload}
+    if not updates:
+        raise HTTPException(status_code=400, detail="Profile event has no supported startup fields")
+
+    async_session = request.app.state.async_session
+    async with async_session() as session:
+        profile = (
+            await session.execute(
+                select(StartupProfile).where(StartupProfile.user_id == parsed_user_id)
+            )
+        ).scalar_one_or_none()
+        if profile is None:
+            profile = StartupProfile(user_id=parsed_user_id)
+            session.add(profile)
+        for key, value in updates.items():
+            setattr(profile, key, value)
+        await session.commit()
+
+    await emit_demo_log_async(
+        user_id=user_id,
+        message="[Demo Simulator] Startup profile updated for mentor and worker context.",
+        pillar="DEMO",
+        agent_name="Demo Simulator",
+        event_type="demo_profile",
+        step="profile_updated",
+        details={"fields": sorted(updates.keys())},
+    )
+    return {"status": "profile_updated", "fields": sorted(updates.keys())}
+
+
 @router.get("/status")
 async def demo_status():
     return {
@@ -215,10 +263,17 @@ async def trigger_scenario(body: DemoScenarioRequest, request: Request):
     )
 
     queued = []
+    applied = []
     for index, scenario_event in enumerate(events, start=1):
+        source = str(scenario_event.get("source", "")).strip().lower()
+        if source == "profile":
+            result = await _apply_startup_profile_event(request, body.user_id, scenario_event)
+            applied.append(result)
+            continue
+
         event = _build_founder_event(
             user_id=body.user_id,
-            source=str(scenario_event.get("source", "")),
+            source=source,
             raw_payload=scenario_event,
             scenario_name=body.scenario_name,
         )
@@ -248,6 +303,7 @@ async def trigger_scenario(body: DemoScenarioRequest, request: Request):
         "status": "queued",
         "scenario_name": body.scenario_name,
         "queued": len(queued),
+        "applied": applied,
         "events": queued,
     }
 

@@ -25,13 +25,16 @@ WORKER_CATALOG: tuple[WorkerCatalogItem, ...] = (
     WorkerCatalogItem(
         key="gtm-agent",
         name="GTM Agent",
-        description="Monitors sales and customer signals. Prepares founder-reviewed follow-ups for revenue-moving conversations, churn risk, and investor asks.",
+        description="Monitors revenue, sales pipeline, customer expansion, churn risk, and customer-facing escalations. Prepares founder-reviewed GTM reports and follow-ups.",
         lane="gtm",
-        tags=("customer", "support", "gtm", "slack", "email", "revenue"),
+        tags=("gtm", "customer", "revenue", "sales", "pipeline", "churn", "renewal", "expansion", "billing"),
         default_config={
-            "monitor_targets": "#sales,#customers,investors",
+            "monitor_targets": "#sales,#customers,#support-escalations,enterprise accounts",
             "auto_draft_replies": True,
-            "custom_instructions": "Prioritize revenue-moving follow-ups, churn risk, investor asks, and stalled pipeline conversations.",
+            "custom_instructions": (
+                "Stay strictly in GTM scope: pipeline, revenue, customers, renewals, expansion, churn, and "
+                "customer-facing incidents. Exclude hiring, recruiting, engineering-only incidents, and internal staffing decisions unless they directly affect a customer or revenue commitment."
+            ),
         },
     ),
     WorkerCatalogItem(

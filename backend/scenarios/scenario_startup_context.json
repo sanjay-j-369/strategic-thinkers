@@ -1,0 +1,48 @@
+[
+  {
+    "timestamp": "2026-04-10T08:00:00Z",
+    "source": "profile",
+    "profile": {
+      "stage": "seed",
+      "mrr_usd": 48000,
+      "burn_rate_usd": 92000,
+      "runway_months": 13,
+      "headcount": 14,
+      "has_cto": true,
+      "dev_spend_pct": 0.42
+    }
+  },
+  {
+    "timestamp": "2026-04-10T08:05:00Z",
+    "source": "slack",
+    "sender": {
+      "name": "Alex Chen"
+    },
+    "channel": "#company-context",
+    "body": "Company snapshot for the operating agents: ClearLedger builds an AI accounts-receivable copilot for mid-market finance teams. Current ICP is 200-1000 employee B2B SaaS and healthcare services companies. Pricing is $1,800/month base plus usage. Current MRR is $48k, net revenue retention target is 115%, gross margin target is 78%, and the top GTM priority is converting 6 active pilots into annual contracts before quarter-end.",
+    "context_tags": ["startup-profile", "company", "gtm", "revenue", "sales", "pipeline", "mentor"],
+    "source_id": "startup-context-001"
+  },
+  {
+    "timestamp": "2026-04-10T08:10:00Z",
+    "source": "slack",
+    "sender": {
+      "name": "GTM Lead"
+    },
+    "channel": "#sales",
+    "body": "GTM snapshot: pipeline is $410k ARR across 11 opportunities. Three enterprise pilots are in procurement, two renewals are at risk because invoice matching is still manual, and HealthBridge asked for a security review before signing an annual contract. Founder attention should stay on procurement unblockers, security review turnaround, and renewal save plans.",
+    "context_tags": ["gtm", "revenue", "sales", "pipeline", "renewal", "customer"],
+    "source_id": "startup-context-002"
+  },
+  {
+    "timestamp": "2026-04-10T08:15:00Z",
+    "source": "slack",
+    "sender": {
+      "name": "Mentor Ops"
+    },
+    "channel": "#leadership",
+    "body": "Operating constraints for mentor review: burn is $92k/month, runway is 13 months, headcount is 14, engineering spend is 42% of burn, and customer support load is rising because pilots need finance workflow mapping. Board concern is whether GTM focus is tight enough to turn pilots into annual revenue before hiring ahead of proof.",
+    "context_tags": ["startup-profile", "mentor", "revenue", "runway", "burn", "customer"],
+    "source_id": "startup-context-003"
+  }
+]

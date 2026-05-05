@@ -7,6 +7,7 @@ from pathlib import Path
 load_dotenv(Path(__file__).resolve().parents[4] / ".env")
 
 from groq import Groq
+from app.pipeline.pii import restore_pii_tokens, tokenize_pii
 from app.security import resolve_user
 from app.services.worker_directory import get_catalog_item
 
@@ -44,12 +45,16 @@ async def chat(body: ChatRequest, request: Request):
     # Run blocking context fetch in a thread pool so we don't block the event loop
     loop = asyncio.get_event_loop()
     context_tags = _resolve_context_tags(body.worker_key, body.context_tags)
-    context = await loop.run_in_executor(None, _get_context, str(user.id), body.message, context_tags)
-    system_content = _build_system_prompt(body.system_prompt, context, context_tags)
+    redacted_message, redacted_history, redacted_system_prompt, chat_pii_mapping = (
+        _redact_chat_payload(body.message, body.history, body.system_prompt)
+    )
+
+    context = await loop.run_in_executor(None, _get_context, str(user.id), redacted_message, context_tags)
+    system_content = _build_system_prompt(redacted_system_prompt, context, context_tags)
 
     messages = [{"role": "system", "content": system_content}]
-    messages += body.history[-10:]
-    messages.append({"role": "user", "content": body.message})
+    messages += redacted_history
+    messages.append({"role": "user", "content": redacted_message})
 
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
@@ -59,7 +64,7 @@ async def chat(body: ChatRequest, request: Request):
     )
 
     reply = response.choices[0].message.content
-    return {"reply": reply}
+    return {"reply": restore_pii_tokens(reply or "", chat_pii_mapping)}
 
 
 def _resolve_context_tags(worker_key: str | None, context_tags: list[str]) -> list[str]:
@@ -70,6 +75,29 @@ def _resolve_context_tags(worker_key: str | None, context_tags: list[str]) -> li
 
     item = get_catalog_item(worker_key)
     return list(item.tags) if item else []
+
+
+def _redact_chat_payload(
+    message: str,
+    history: list[dict],
+    system_prompt: str | None,
+) -> tuple[str, list[dict], str | None, dict[str, str]]:
+    redacted_message, chat_pii_mapping = tokenize_pii(message)
+    redacted_history = []
+    for item in history[-10:]:
+        content = item.get("content") if isinstance(item, dict) else None
+        role = item.get("role") if isinstance(item, dict) else None
+        if role not in {"user", "assistant"} or not isinstance(content, str):
+            continue
+        redacted_content, item_mapping = tokenize_pii(content)
+        chat_pii_mapping.update(item_mapping)
+        redacted_history.append({"role": role, "content": redacted_content})
+
+    redacted_system_prompt = None
+    if system_prompt:
+        redacted_system_prompt, system_mapping = tokenize_pii(system_prompt)
+        chat_pii_mapping.update(system_mapping)
+    return redacted_message, redacted_history, redacted_system_prompt, chat_pii_mapping
 
 
 def _build_system_prompt(system_prompt: str | None, context: str, context_tags: list[str]) -> str:
@@ -91,21 +119,24 @@ Be direct and specific. Reference actual people, roles, and messages from the co
 
 
 def _get_context(user_id: str, question: str, context_tags: list[str] | None = None) -> str:
-    """Pull context from Pinecone first, fallback to redacted Postgres archive."""
+    """Pull fast redacted context for interactive chat.
+
+    Chat is latency-sensitive because it runs through the frontend proxy. Prefer
+    local Postgres archive reads and only use vector search as a final fallback.
+    """
     context_tags = context_tags or []
 
     if context_tags:
-        tagged_context = _query_tagged_memory(user_id, question, context_tags)
+        tagged_context = _query_postgres(user_id, context_tags=context_tags)
         if tagged_context:
             return tagged_context
 
-    # Try Pinecone semantic search first
-    pinecone_results = _query_pinecone(user_id, question)
-    if pinecone_results:
-        return pinecone_results
+    latest_context = _query_postgres(user_id)
+    if latest_context:
+        return latest_context
 
-    # Fallback: pull latest 20 items from Postgres archive directly
-    return _query_postgres(user_id)
+    pinecone_results = _query_pinecone(user_id, question)
+    return pinecone_results or "No emails or Slack messages found yet."
 
 
 def _query_tagged_memory(user_id: str, question: str, context_tags: list[str]) -> str:
@@ -154,7 +185,7 @@ def _query_pinecone(user_id: str, question: str) -> str:
         return ""
 
 
-def _query_postgres(user_id: str) -> str:
+def _query_postgres(user_id: str, context_tags: list[str] | None = None) -> str:
     """Fallback: return recent redacted archive items from Postgres."""
     try:
         import uuid
@@ -170,18 +201,24 @@ def _query_postgres(user_id: str) -> str:
                 select(Archive)
                 .where(Archive.user_id == uuid.UUID(user_id))
                 .order_by(Archive.ingested_at.desc())
-                .limit(20)
+                .limit(60 if context_tags else 20)
             ).scalars().all()
 
         if not results:
-            return "No emails or Slack messages found yet."
+            return ""
 
         snippets = []
         for item in results:
+            if context_tags:
+                tags = item.context_tags or []
+                if not any(tag in tags for tag in context_tags):
+                    continue
             content = (item.content_redacted or "").strip()
             if content:
                 snippets.append(f"[{item.source}] {content[:500]}")
+            if len(snippets) >= 20:
+                break
 
-        return "\n---\n".join(snippets) if snippets else "No content available."
+        return "\n---\n".join(snippets) if snippets else ""
     except Exception as e:
         return f"Could not load context: {e}"

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Bot, MessageSquare, Radar, Settings, UserPlus, Users } from "lucide-react";
+import { Bot, ChevronDown, MessageSquare, Play, Radar, Settings, UserPlus, Users } from "lucide-react";
 
 import { MentorChat } from "@/components/MentorChat";
 import { WorkerConfigDrawer, type WorkerItem } from "@/components/WorkerConfigDrawer";
@@ -23,13 +23,14 @@ const WORKER_ICONS: Record<string, React.ElementType> = {
 
 const WORKER_SYSTEM_PROMPTS: Record<string, string> = {
   "gtm-agent": `You are a GTM (Go-To-Market) advisor for founders.
-Focus on:
-- Sales pipeline health and revenue opportunities
-- Customer acquisition and churn risks
-- Competitive positioning and market timing
-- Investor updates and board readiness
+Stay strictly focused on:
+- Sales pipeline health, revenue opportunities, renewals, expansion, and churn risk
+- Customer-facing escalations, customer commitments, and revenue-impacting incidents
+- GTM positioning and market timing only when it affects pipeline or customers
 
-Provide specific, actionable guidance based on the founder's context. Be direct about risks and opportunities.`,
+Do not include hiring, recruiting, candidate evaluation, engineering-only incident detail, or general company operations unless the context explicitly ties it to customer or revenue impact.
+Do not list internal context providers from startup-profile, company-context, mentor, or leadership seed messages as stakeholders or owners. Use the business signal from those messages, not the sender names.
+When generating a report, use GTM sections only: Revenue/Customer Signals, Risks, Recommended Founder Actions, Owners/Dates.`,
   "hiring-agent": `You are a hiring advisor for startup founders.
 Focus on:
 - Recruiting pipeline efficiency and candidate quality
@@ -65,21 +66,49 @@ Keep founders out of legal trouble while enabling velocity.`,
 };
 
 const WORKER_CONTEXT_TAGS: Record<string, string[]> = {
-  "gtm-agent": ["customer", "support", "gtm", "slack", "email", "revenue"],
+  "gtm-agent": ["gtm", "customer", "revenue", "sales", "pipeline", "churn", "renewal", "expansion", "billing"],
   "hiring-agent": ["recruiting", "hr", "hiring", "candidates", "interviews"],
   "finance-agent": ["finance", "burn-rate", "runway", "budget", "metrics"],
   "product-agent": ["product", "feedback", "users", "features", "roadmap"],
   "compliance-agent": ["legal", "compliance", "contracts", "nda", "regulatory"],
 };
 
+interface AgentRunItem {
+  id: string;
+  pillar: string;
+  agent_name: string;
+  trigger_type: string;
+  status: string;
+  input_payload?: Record<string, unknown>;
+  output_payload?: {
+    blocker_summary?: string;
+    notification?: {
+      title?: string;
+      body?: string;
+    };
+    notifications?: Array<{
+      title?: string;
+      body?: string;
+    }>;
+    metrics?: Record<string, unknown>;
+  };
+  error_text?: string | null;
+  started_at: string;
+  completed_at?: string | null;
+}
+
 export function WorkerDirectory() {
   const { token, isAuthenticated, loading, user } = useAuth();
   const [workers, setWorkers] = useState<WorkerItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [activeWorker, setActiveWorker] = useState<WorkerItem | null>(null);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>("marketplace");
   const [selectedWorkerForChat, setSelectedWorkerForChat] = useState<string | null>(null);
+  const [progressRuns, setProgressRuns] = useState<AgentRunItem[]>([]);
+  const [progressOpen, setProgressOpen] = useState(false);
+  const [expandedRunIds, setExpandedRunIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!token || !isAuthenticated) return;
@@ -104,6 +133,35 @@ export function WorkerDirectory() {
     };
   }, [isAuthenticated, token]);
 
+  useEffect(() => {
+    if (!token || !isAuthenticated) return;
+    let active = true;
+
+    async function loadProgress() {
+      try {
+        const [workerRuns, mentorRuns] = await Promise.all([
+          apiFetch<{ items: AgentRunItem[] }>("/api/ops/runs?pillar=WORKER&limit=8", { token }),
+          apiFetch<{ items: AgentRunItem[] }>("/api/ops/runs?pillar=MENTOR&limit=4", { token }),
+        ]);
+        if (!active) return;
+        setProgressRuns(
+          [...(workerRuns.items || []), ...(mentorRuns.items || [])]
+            .sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at))
+            .slice(0, 8)
+        );
+      } catch {
+        if (active) setProgressRuns([]);
+      }
+    }
+
+    void loadProgress();
+    const interval = window.setInterval(loadProgress, 4000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [isAuthenticated, token]);
+
   const hiredWorkers = useMemo(
     () => workers.filter((worker) => worker.status === "hired"),
     [workers]
@@ -121,6 +179,7 @@ export function WorkerDirectory() {
         current.map((item) => (item.worker_key === workerKey ? worker : item))
       );
       setActiveWorker(worker);
+      setNotice(`${worker.name} hired. It will run on background sweeps and can be run manually.`);
       setError(null);
     } catch (hireError) {
       setError(hireError instanceof Error ? hireError.message : "Failed to hire worker.");
@@ -142,6 +201,7 @@ export function WorkerDirectory() {
         current.map((item) => (item.worker_key === workerKey ? updated : item))
       );
       setActiveWorker(updated);
+      setNotice(`${updated.name} focus updated.`);
       setError(null);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Failed to save worker configuration.");
@@ -149,6 +209,42 @@ export function WorkerDirectory() {
     } finally {
       setPendingKey(null);
     }
+  }
+
+  async function runWorker(workerKey: string) {
+    if (!token) return;
+    setPendingKey(workerKey);
+    try {
+      const response = await apiFetch<{ message?: string }>(`/api/workers/${workerKey}/run`, {
+        method: "POST",
+        token,
+      });
+      setNotice(response.message || "Worker run queued.");
+      setActiveTab("active");
+      setError(null);
+    } catch (runError) {
+      setError(runError instanceof Error ? runError.message : "Failed to queue worker run.");
+    } finally {
+      setPendingKey(null);
+    }
+  }
+
+  function progressSummary(run: AgentRunItem) {
+    if (run.error_text) return run.error_text;
+    if (run.output_payload?.notification?.body) return run.output_payload.notification.body;
+    if (run.output_payload?.blocker_summary) return run.output_payload.blocker_summary;
+    const firstNotification = run.output_payload?.notifications?.[0];
+    if (firstNotification?.body) return firstNotification.body;
+    if (run.status === "RUNNING") return "Working through context retrieval, analysis, and founder-facing output.";
+    return "Queued or waiting for the next worker step.";
+  }
+
+  function toggleRunExpanded(runId: string) {
+    setExpandedRunIds((current) =>
+      current.includes(runId)
+        ? current.filter((id) => id !== runId)
+        : [...current, runId]
+    );
   }
 
   function handleWorkerAction(worker: WorkerItem, action: "configure" | "chat") {
@@ -220,6 +316,11 @@ export function WorkerDirectory() {
             {error}
           </div>
         )}
+        {notice && !error ? (
+          <div className="border border-border bg-card px-4 py-3 text-sm text-foreground/70">
+            {notice}
+          </div>
+        ) : null}
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v)}>
           <TabsList>
@@ -366,6 +467,19 @@ export function WorkerDirectory() {
                               variant="outline"
                               size="sm"
                               className="flex-1"
+                              disabled={pendingKey === worker.worker_key}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void runWorker(worker.worker_key);
+                              }}
+                            >
+                              <Play className="h-3 w-3 mr-1" />
+                              Run
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex-1"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setActiveWorker(worker);
@@ -391,6 +505,84 @@ export function WorkerDirectory() {
                       </Card>
                     );
                   })}
+                </div>
+
+                <div className="border border-border bg-card">
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left"
+                    onClick={() => setProgressOpen((current) => !current)}
+                    aria-expanded={progressOpen}
+                  >
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-[0.16em] text-foreground/50">
+                        Worker and Mentor Progress
+                      </p>
+                      <p className="mt-1 text-xs text-foreground/50">
+                        Safe execution status and output previews from background runs.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="rounded-none">{progressRuns.length}</Badge>
+                      <ChevronDown
+                        className={`h-4 w-4 text-foreground/50 transition-transform ${
+                          progressOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    </div>
+                  </button>
+
+                  {progressOpen ? (
+                    <div className="border-t border-border px-4 py-4">
+                      {progressRuns.length === 0 ? (
+                        <p className="text-sm text-foreground/50">
+                          No recent worker or mentor runs yet. Click Run on an active worker to queue one.
+                        </p>
+                      ) : (
+                        <div className="grid gap-3">
+                          {progressRuns.map((run) => {
+                            const expanded = expandedRunIds.includes(run.id);
+                            return (
+                              <div key={run.id} className="border border-border bg-background px-3 py-3">
+                                <button
+                                  type="button"
+                                  className="flex w-full items-start justify-between gap-3 text-left"
+                                  onClick={() => toggleRunExpanded(run.id)}
+                                  aria-expanded={expanded}
+                                >
+                                  <div>
+                                    <p className="text-sm font-semibold text-foreground">
+                                      {run.agent_name}
+                                    </p>
+                                    <p className="mt-1 text-[11px] uppercase tracking-[0.14em] text-foreground/40">
+                                      {run.pillar} / {run.trigger_type} / {new Date(run.started_at).toLocaleTimeString()}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant={run.status === "FAILED" ? "amber" : "outline"} className="rounded-none">
+                                      {run.status}
+                                    </Badge>
+                                    <ChevronDown
+                                      className={`h-4 w-4 text-foreground/50 transition-transform ${
+                                        expanded ? "rotate-180" : ""
+                                      }`}
+                                    />
+                                  </div>
+                                </button>
+                                <p
+                                  className={`mt-3 whitespace-pre-line text-sm leading-6 text-foreground/65 ${
+                                    expanded ? "" : "line-clamp-3"
+                                  }`}
+                                >
+                                  {progressSummary(run)}
+                                </p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
 
                 {chatWorker && (

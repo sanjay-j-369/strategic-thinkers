@@ -22,12 +22,13 @@ def _execute_vault_mode(result: dict) -> dict:
 
 def _compose_founder_reviewed_follow_up(summary: str) -> str:
     if not summary:
-        summary = "There are open operational items that need a clear owner and next milestone."
+        summary = "No material GTM blocker was found in the latest customer, revenue, or pipeline signals."
 
     return (
-        "Hi,\n\n"
-        "I wanted to follow up on the open items the team flagged:\n\n"
+        "GTM Advisor Report\n\n"
         f"{summary}\n\n"
-        "Can you confirm the owner, next milestone, and timing so we can keep this moving?\n\n"
-        "Best,"
+        "Founder review checklist:\n"
+        "- Confirm the revenue or customer owner for each open item.\n"
+        "- Decide whether a customer-facing update is needed today.\n"
+        "- Adjust GTM worker focus in the worker config if this report should track a narrower segment, account, or pipeline stage."
     )

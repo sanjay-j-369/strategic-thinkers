@@ -1,4 +1,4 @@
-from app.api.routes.chat import _build_system_prompt, _resolve_context_tags
+from app.api.routes.chat import _build_system_prompt, _redact_chat_payload, _resolve_context_tags
 
 
 def test_worker_system_prompt_keeps_workspace_context():
@@ -20,3 +20,19 @@ def test_worker_key_resolves_context_tags():
 
     assert "hiring" in tags
     assert "candidates" in tags
+
+
+def test_chat_payload_redacts_user_pii_before_llm():
+    message, history, system_prompt, mapping = _redact_chat_payload(
+        "Ask Jane Parker at jane@example.com about the contract.",
+        [{"role": "user", "content": "Call me at 555-123-4567."}],
+        "You advise Alex Kim.",
+    )
+
+    combined = "\n".join([message, *(item["content"] for item in history), system_prompt or ""])
+    assert "Jane Parker" not in combined
+    assert "jane@example.com" not in combined
+    assert "555-123-4567" not in combined
+    assert "Alex Kim" not in combined
+    assert "<EMAIL_" in combined
+    assert "jane@example.com" in mapping.values()

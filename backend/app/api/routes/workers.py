@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from app.models.agent_run import AgentRun
 from app.models.worker_agent import WorkerAgent, WorkerStatus
+from app.runtime.task_names import TaskNames
 from app.security import require_current_user
 from app.services.worker_directory import get_catalog_item, list_catalog_items
 
@@ -154,4 +155,42 @@ async def update_worker_config(worker_key: str, body: WorkerConfigUpdate, reques
         "security_mode": "vault",
         "live_status": "Active",
         "updated_at": row.updated_at.isoformat(),
+    }
+
+
+@router.post("/{worker_key}/run")
+async def run_worker_now(worker_key: str, request: Request):
+    user = await require_current_user(request)
+    item = get_catalog_item(worker_key)
+    if not item:
+        raise HTTPException(status_code=404, detail="Worker not found")
+
+    async_session = request.app.state.async_session
+    async with async_session() as session:
+        row = (
+            await session.execute(
+                select(WorkerAgent).where(
+                    WorkerAgent.user_id == user.id,
+                    WorkerAgent.worker_key == worker_key,
+                    WorkerAgent.status == WorkerStatus.HIRED,
+                )
+            )
+        ).scalar_one_or_none()
+        if not row:
+            raise HTTPException(status_code=400, detail="Worker must be hired before it can run")
+
+    task_id = await request.app.state.task_queue.enqueue(
+        TaskNames.AI_WORKER_SWEEP,
+        {
+            "worker_key": worker_key,
+            "user_ids": [str(user.id)],
+            "trigger_type": "manual",
+        },
+        priority=1,
+    )
+    return {
+        "status": "queued",
+        "task_id": task_id,
+        "worker_key": worker_key,
+        "message": f"{item.name} is running in the background.",
     }

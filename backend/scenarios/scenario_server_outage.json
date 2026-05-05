@@ -8,7 +8,7 @@
     },
     "channel": "#support-escalations",
     "body": "Three enterprise customers are reporting 500s on the billing API. We need an owner now.",
-    "context_tags": ["incident", "customer", "technical", "urgent"],
+    "context_tags": ["incident", "customer", "revenue", "billing", "urgent"],
     "source_id": "slack-outage-001"
   },
   {
@@ -31,7 +31,7 @@
     },
     "subject": "P1: Billing workflow unavailable",
     "body": "Our finance team cannot process invoices. Please confirm ETA for a fix and whether data is affected.",
-    "context_tags": ["customer", "incident", "billing"],
+    "context_tags": ["customer", "incident", "billing", "revenue", "gtm"],
     "source_id": "gmail-outage-003"
   }
 ]

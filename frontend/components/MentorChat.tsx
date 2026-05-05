@@ -9,7 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/components/providers/auth-provider";
 import { apiFetch } from "@/lib/api";
+import { extractPIITokens, replacePIITokens, resolvePIITokenValues, tokenizePIILocally } from "@/lib/pii";
 
 export interface ChatMessage {
   role: "user" | "assistant";
@@ -42,6 +44,7 @@ export function MentorChat({
   workerKey,
   contextTags = [],
 }: MentorChatProps) {
+  const { privateKey } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -70,6 +73,46 @@ export function MentorChat({
       // Ignore local persistence failures.
     }
   }, [messages, resolvedStorageKey]);
+
+  async function resolveVaultTokens(value: string, localMapping: Record<string, string> = {}) {
+    let resolved = replacePIITokens(value, localMapping);
+    const backendTokens = extractPIITokens(resolved).filter(
+      (tokenValue) => !(tokenValue in localMapping)
+    );
+    if (backendTokens.length === 0) return resolved;
+
+    try {
+      const backendPIIMap = await resolvePIITokenValues(backendTokens, token, privateKey);
+      resolved = replacePIITokens(resolved, backendPIIMap);
+    } catch {
+      // Keep vault tokens visible if this browser session has not unlocked private key material.
+    }
+    return resolved;
+  }
+
+  useEffect(() => {
+    if (!token || messages.length === 0) return;
+    const unresolvedMessages = messages.filter((message) => extractPIITokens(message.content).length > 0);
+    if (unresolvedMessages.length === 0) return;
+
+    let active = true;
+    async function resolveStoredMessages() {
+      const resolved = await Promise.all(
+        messages.map(async (message) => ({
+          ...message,
+          content: await resolveVaultTokens(message.content),
+        }))
+      );
+      if (active && JSON.stringify(resolved) !== JSON.stringify(messages)) {
+        setMessages(resolved);
+      }
+    }
+
+    void resolveStoredMessages();
+    return () => {
+      active = false;
+    };
+  }, [messages, privateKey, token]);
 
   function downloadBlob(filename: string, blob: Blob) {
     const url = URL.createObjectURL(blob);
@@ -183,17 +226,32 @@ export function MentorChat({
     return new Blob([pdf], { type: "application/pdf" });
   }
 
-  function downloadTranscript() {
-    const content = messages
+  async function downloadTranscript() {
+    const resolvedMessages = await Promise.all(
+      messages.map(async (message) => ({
+        ...message,
+        content: await resolveVaultTokens(message.content),
+      }))
+    );
+    const content = resolvedMessages
       .map((message) => `## ${message.role === "user" ? "User" : title}\n\n${message.content}`)
       .join("\n\n");
     downloadMarkdown(`${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-history.md`, content);
+    setMessages(resolvedMessages);
   }
 
-  function downloadLatestReport() {
+  async function downloadLatestReport() {
     const latest = [...messages].reverse().find((message) => message.role === "assistant");
     if (!latest) return;
-    downloadBlob(reportFilename("pdf"), buildPdfBlob(latest.content));
+    const resolvedContent = await resolveVaultTokens(latest.content);
+    downloadBlob(reportFilename("pdf"), buildPdfBlob(resolvedContent));
+    if (resolvedContent !== latest.content) {
+      setMessages((current) =>
+        current.map((message) =>
+          message === latest ? { ...message, content: resolvedContent } : message
+        )
+      );
+    }
   }
 
   function lastUserAskedForPdf() {
@@ -214,7 +272,14 @@ export function MentorChat({
       setError(null);
 
       try {
-        const history = messages.map((m) => ({ role: m.role, content: m.content }));
+        let chatPIIMap: Record<string, string> = {};
+        const history = messages.map((m) => {
+          const tokenized = tokenizePIILocally(m.content, chatPIIMap);
+          chatPIIMap = tokenized.mapping;
+          return { role: m.role, content: tokenized.redacted };
+        });
+        const tokenizedInput = tokenizePIILocally(trimmed, chatPIIMap);
+        chatPIIMap = tokenizedInput.mapping;
         const body: {
           message: string;
           history: typeof history;
@@ -222,7 +287,7 @@ export function MentorChat({
           workerKey?: string;
           contextTags?: string[];
         } = {
-          message: trimmed,
+          message: tokenizedInput.redacted,
           history,
         };
         if (systemPrompt) {
@@ -241,15 +306,20 @@ export function MentorChat({
           json: body,
         });
 
+        const assistantContent = await resolveVaultTokens(
+          data.reply || "I couldn't generate a response. Please try again.",
+          chatPIIMap
+        );
+
         const assistantMessage: ChatMessage = {
           role: "assistant",
-          content: data.reply || "I couldn't generate a response. Please try again.",
+          content: assistantContent,
           timestamp: new Date().toISOString(),
         };
         setMessages((prev) => [...prev, assistantMessage]);
         if (trimmed.match(/\b(pdf|downloadable report|download as pdf)\b/i)) {
           setTimeout(() => {
-            downloadBlob(reportFilename("pdf"), buildPdfBlob(assistantMessage.content));
+            downloadBlob(reportFilename("pdf"), buildPdfBlob(assistantContent));
           }, 100);
         }
       } catch (err) {
@@ -259,7 +329,7 @@ export function MentorChat({
         setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
       }
     },
-    [contextTags, input, loading, messages, systemPrompt, token, workerKey]
+    [contextTags, input, loading, messages, privateKey, systemPrompt, token, workerKey]
   );
 
   return (
@@ -299,7 +369,7 @@ export function MentorChat({
               <div key={i} className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
                 <div
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                    msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"
+                    msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-surface-high text-foreground border border-border"
                   }`}
                 >
                   {msg.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
@@ -308,10 +378,10 @@ export function MentorChat({
                   className={`rounded-2xl px-4 py-3 max-w-[85%] ${
                     msg.role === "user"
                       ? "bg-primary text-primary-foreground"
-                      : "bg-secondary text-secondary-foreground"
+                      : "bg-surface-elevated text-foreground border border-border shadow-sm"
                   }`}
                 >
-                  <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert [&_strong]:font-semibold">
+                  <div className="text-sm leading-relaxed prose prose-sm max-w-none text-current dark:prose-invert [&_p]:my-2 [&_strong]:font-semibold">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
                   </div>
                   {msg.timestamp && (
@@ -324,10 +394,10 @@ export function MentorChat({
             ))}
             {loading && (
               <div className="flex gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-secondary-foreground">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-surface-high text-foreground">
                   <Bot className="h-4 w-4" />
                 </div>
-                <div className="rounded-2xl px-4 py-3 bg-secondary text-secondary-foreground">
+                <div className="rounded-2xl border border-border bg-surface-elevated px-4 py-3 text-foreground shadow-sm">
                   <p className="text-sm animate-pulse">Thinking...</p>
                 </div>
               </div>
@@ -374,13 +444,13 @@ export function MentorChat({
             <p className="text-xs text-foreground/50">Press Enter to send, Shift+Enter for new line</p>
             <div className="flex gap-2">
               {messages.some((message) => message.role === "assistant") ? (
-                <Button type="button" variant="outline" size="sm" onClick={downloadLatestReport}>
+                <Button type="button" variant="outline" size="sm" onClick={() => void downloadLatestReport()}>
                   <Download className="h-4 w-4" />
                   {lastUserAskedForPdf() ? "PDF" : "Report PDF"}
                 </Button>
               ) : null}
               {messages.length > 0 ? (
-                <Button type="button" variant="outline" size="sm" onClick={downloadTranscript}>
+                <Button type="button" variant="outline" size="sm" onClick={() => void downloadTranscript()}>
                   <Download className="h-4 w-4" />
                   History
                 </Button>

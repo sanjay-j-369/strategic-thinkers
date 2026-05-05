@@ -63,7 +63,8 @@ async def ai_worker_handler(app: FastAPI, payload: dict) -> dict:
                 config=worker_runtime.get("config"),
             )
             result["config"] = worker_runtime.get("config", {})
-            result = await asyncio.to_thread(execute_gtm_agent, user_id, result)
+            if worker_key == "gtm-agent":
+                result = await asyncio.to_thread(execute_gtm_agent, user_id, result)
             notifications = []
             if result.get("notification"):
                 notifications.append(
