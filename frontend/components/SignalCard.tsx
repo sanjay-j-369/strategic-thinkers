@@ -49,12 +49,15 @@ function signalTone(severity?: string) {
 
 export function SignalCard({ signal }: { signal: SignalItem }) {
   const [expanded, setExpanded] = useState(false);
+  const [deleted, setDeleted] = useState(false);
   const payload = signal.payload;
   const embeddedType =
     payload && typeof payload === "object" && "type" in payload ? String(payload.type) : signal.type;
 
+  if (deleted) return null;
+
   if (embeddedType === "ASSISTANT_PREP" && payload && typeof payload === "object") {
-    return <PrepCard data={payload as any} />;
+    return <PrepCard data={payload as any} notificationId={signal.id} onDelete={() => setDeleted(true)} />;
   }
 
   if (embeddedType === "GUIDE_QUERY" && payload && typeof payload === "object") {

@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import TypedDict
 
 from app.agentic.context import load_last_agent_snapshot, load_startup_profile, recent_archive_items
-from app.agentic.llm import complete_text
+from .formatting import build_board_memo
 
 
 class MentorState(TypedDict):
@@ -110,13 +110,8 @@ def generate_findings(state: MentorState) -> MentorState:
             }
         )
 
-    summary_seed = "\n".join(f"- {item['body']}" for item in findings) or "No critical strategic alerts."
-    memo = complete_text(
-        f"Convert these strategic findings into a board-style weekly memo:\n{summary_seed}",
-        fallback=summary_seed,
-        max_tokens=260,
-    )
-    return {**state, "findings": findings, "memo": memo.strip() or summary_seed}
+    memo = build_board_memo({**state, "findings": findings})
+    return {**state, "findings": findings, "memo": memo}
 
 
 def compose_mentor_notifications(state: MentorState) -> MentorState:

@@ -58,6 +58,135 @@ def _to_str_list(value) -> list[str]:
     return []
 
 
+# --- Presentation / sanitization helpers ---
+import re
+from datetime import datetime, timezone
+
+
+def _map_entity_to_role(entity: str) -> str:
+    if not entity:
+        return "Participant"
+    e = entity.lower()
+    # If it's an email address, map heuristically
+    if "@" in e:
+        local = e.split("@", 1)[0]
+        if "investor" in local or "investor" in e:
+            return "Investor"
+        if "team" in local or "employee" in local or "teammember" in local or "staff" in local:
+            return "Team Member"
+        # common role words
+        if local in ("ceo", "cto", "cfo", "founder"):
+            return "Team Member"
+        return "Participant"
+
+    # If name-like string contains role keywords
+    if any(x in e for x in ("investor", "vc", "partner")):
+        return "Investor"
+    if any(x in e for x in ("team", "employee", "engineer", "manager", "founder")):
+        return "Team Member"
+    return "Participant"
+
+
+_PLACEHOLDER_RE = re.compile(r"<(EMAIL|PERSON)[^>]*>", flags=re.IGNORECASE)
+_EMAIL_IN_TEXT_RE = re.compile(r"[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}")
+_UUID_RE = re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b")
+
+
+def _sanitize_text_placeholders(text: str) -> str:
+    if not text:
+        return text
+
+    # Replace explicit placeholder tokens like <EMAIL_xxx> or <PERSON_xxx>
+    def _repl(m: re.Match) -> str:
+        s = m.group(0)
+        # try to find an email inside the token
+        email_m = _EMAIL_IN_TEXT_RE.search(s)
+        if email_m:
+            return _map_entity_to_role(email_m.group(0))
+        return "Participant"
+
+    out = _PLACEHOLDER_RE.sub(_repl, text)
+
+    # Replace any raw emails with roles where possible
+    def _email_repl(m: re.Match) -> str:
+        return _map_entity_to_role(m.group(0))
+
+    out = _EMAIL_IN_TEXT_RE.sub(_email_repl, out)
+
+    # Remove UUIDs or long technical ids
+    out = _UUID_RE.sub("", out)
+
+    # Collapse excessive whitespace
+    out = re.sub(r"\s+", " ", out).strip()
+    return out
+
+
+def _shorten_to_sentences(text: str, max_sentences: int = 3) -> str:
+    if not text:
+        return ""
+    # naive sentence splitter
+    parts = re.split(r'(?<=[.!?])\s+', text.strip())
+    if len(parts) <= max_sentences:
+        return " ".join(parts).strip()
+    return " ".join(parts[:max_sentences]).strip()
+
+
+def _build_presentation(topic: str, entities: list[str], generated_at_iso: str, summary: str, promises: list[str], unresolved_loops: list[dict]) -> str:
+    # Attendees: map entities to roles and deduplicate preserving order
+    roles = []
+    for e in entities or []:
+        role = _map_entity_to_role(e)
+        if role not in roles:
+            roles.append(role)
+
+    # Scheduled: use generated_at as fallback readable time
+    try:
+        dt = datetime.fromisoformat(generated_at_iso)
+        scheduled = dt.astimezone(timezone.utc).strftime("%b %d, %Y %H:%M %Z")
+    except Exception:
+        scheduled = generated_at_iso or "TBD"
+
+    # Clean texts
+    summary_clean = _shorten_to_sentences(_sanitize_text_placeholders(summary), max_sentences=3)
+
+    bullets = []
+    for p in (promises or []):
+        t = _sanitize_text_placeholders(p)
+        if t:
+            bullets.append(t)
+    for loop in (unresolved_loops or []):
+        t = _sanitize_text_placeholders(loop.get("text"))
+        if t:
+            bullets.append(t)
+
+    # Ensure bullets are actionable and unique
+    seen = set()
+    final_bullets = []
+    for b in bullets:
+        if b not in seen:
+            seen.add(b)
+            final_bullets.append(b)
+
+    # Build markdown-like presentation
+    lines = []
+    lines.append(f"Title: {topic}")
+    lines.append("")
+    lines.append(f"Attendees: {', '.join(roles) if roles else 'Participant'}")
+    lines.append(f"Scheduled: {scheduled}")
+    lines.append("")
+    lines.append("Summary:")
+    lines.append(summary_clean or "No summary available.")
+    lines.append("")
+    lines.append("Key Prep Points:")
+    if final_bullets:
+        for b in final_bullets[:8]:
+            lines.append(f"- {b}")
+    else:
+        lines.append("- No specific preparation items identified.")
+
+    return "\n".join(lines)
+
+
 def generate_prep_card(user_id: str, entities: list[str], topic: str) -> dict:
     """
     Dual-filter Pinecone query + Groq LLM synthesis to generate a meeting prep card.
@@ -167,4 +296,12 @@ PARTICIPANTS: {', '.join(entities) if entities else 'Unknown'}"""
         "jump_to_thread_url": jump_to_thread_url,
         "entities": entities,
         "generated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+        "presentation": _build_presentation(
+            topic,
+            entities,
+            __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            summary,
+            promises[:3],
+            unresolved_loops,
+        ),
     }

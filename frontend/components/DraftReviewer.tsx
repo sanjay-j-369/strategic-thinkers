@@ -16,7 +16,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/api";
-import { extractPIITokens, replacePIITokens, resolvePIITokenValues } from "@/lib/pii";
+import {
+  extractPIITokens,
+  replacePIITokens,
+  resolvePIITokenValues,
+  stripPlaceholderTokens,
+} from "@/lib/pii";
 
 interface Draft {
   draft_id: string;
@@ -52,6 +57,53 @@ function recipientEmailForDraft(draft: LocalDraft) {
   const hint = draft.context_payload?.recipient_hint?.trim() || "";
   const hintedEmail = hint.match(EMAIL_PATTERN)?.[0];
   return hintedEmail || "";
+}
+
+function recipientNameForDraft(draft: LocalDraft) {
+  const hint = draft.context_payload?.recipient_hint?.trim();
+  if (hint && !EMAIL_PATTERN.test(hint)) return hint;
+
+  const email = recipientEmailForDraft(draft);
+  if (!email) return "";
+
+  const localPart = email.split("@")[0].replace(/[._-]+/g, " ").trim();
+  if (!localPart) return "";
+
+  return localPart.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function subjectFromDraft(draft: LocalDraft) {
+  const body = stripPlaceholderTokens(draft.draft_text || "").trim();
+  const parsedSubject = body.match(
+    /^\s*Subject:\s*(.*?)(?=\s+(?:Dear|Hello|Hi)\b|\r?\n|$)/is,
+  )?.[1];
+
+  if (parsedSubject?.trim()) {
+    return parsedSubject.trim().replace(/\s+/g, " ");
+  }
+
+  return stripPlaceholderTokens(draft.prompt || "Draft reply").trim();
+}
+
+function bodyFromDraft(draft: LocalDraft) {
+  const recipientName = recipientNameForDraft(draft);
+  const defaultRecipient = recipientName || "there";
+  const rawBody = stripPlaceholderTokens(draft.draft_text || "").trim();
+  const bodyWithoutSubject = rawBody.replace(
+    /^\s*Subject:\s*.*?(?=\s+(?:Dear|Hello|Hi)\b|\r?\n|$)/is,
+    "",
+  );
+  const cleanedBody = bodyWithoutSubject
+    .replace(/^\s*(Dear|Hello|Hi)\s*,?/i, "")
+    .replace(/\n?\s*(Best regards|Kind regards|Sincerely|Regards),?\s*$/i, "")
+    .trim();
+
+  const greeting = `Dear ${defaultRecipient},`;
+  if (!cleanedBody) {
+    return `${greeting}\n\nThank you for your time and consideration. I wanted to share the latest update for your review.\n\nBest regards,\nFounder OS`;
+  }
+
+  return `${greeting}\n\n${cleanedBody}\n\nBest regards,\nFounder OS`;
 }
 
 export function DraftReviewer() {
@@ -142,15 +194,17 @@ export function DraftReviewer() {
     () =>
       routingDrafts.map((draft) => ({
         ...draft,
-        prompt: replacePIITokens(draft.prompt, piiMap),
-        draft_text: replacePIITokens(draft.draft_text, piiMap),
+        prompt: stripPlaceholderTokens(replacePIITokens(draft.prompt, piiMap)),
+        draft_text: stripPlaceholderTokens(replacePIITokens(draft.draft_text, piiMap)),
         context_payload: draft.context_payload
           ? {
               ...draft.context_payload,
-              stakeholder: replacePIITokens(draft.context_payload.stakeholder, piiMap),
-              source: replacePIITokens(draft.context_payload.source, piiMap),
-              recipient_hint: replacePIITokens(draft.context_payload.recipient_hint, piiMap),
-              to_email: replacePIITokens(draft.context_payload.to_email, piiMap),
+              stakeholder: stripPlaceholderTokens(replacePIITokens(draft.context_payload.stakeholder, piiMap)),
+              source: stripPlaceholderTokens(replacePIITokens(draft.context_payload.source, piiMap)),
+              recipient_hint: stripPlaceholderTokens(
+                replacePIITokens(draft.context_payload.recipient_hint, piiMap),
+              ),
+              to_email: stripPlaceholderTokens(replacePIITokens(draft.context_payload.to_email, piiMap)),
             }
           : undefined,
       })),
@@ -161,13 +215,15 @@ export function DraftReviewer() {
     () =>
       backendDrafts.map((draft) => ({
         ...draft,
-        prompt: replacePIITokens(draft.prompt, piiMap),
-        draft_text: replacePIITokens(draft.draft_text, piiMap),
+        prompt: stripPlaceholderTokens(replacePIITokens(draft.prompt, piiMap)),
+        draft_text: stripPlaceholderTokens(replacePIITokens(draft.draft_text, piiMap)),
         context_payload: draft.context_payload
           ? {
               ...draft.context_payload,
-              recipient_hint: replacePIITokens(draft.context_payload.recipient_hint, piiMap),
-              to_email: replacePIITokens(draft.context_payload.to_email, piiMap),
+              recipient_hint: stripPlaceholderTokens(
+                replacePIITokens(draft.context_payload.recipient_hint, piiMap),
+              ),
+              to_email: stripPlaceholderTokens(replacePIITokens(draft.context_payload.to_email, piiMap)),
             }
           : undefined,
       })),
@@ -181,15 +237,15 @@ export function DraftReviewer() {
     setSelectedDraft(draft);
     setEditTo(draft.to);
     setEditSubject(draft.subject);
-    setEditBody(draft.body);
+    setEditBody(stripPlaceholderTokens(draft.body));
   }, []);
 
   const openLocalDraft = useCallback((draft: LocalDraft) => {
     setSelectedDraft(null);
     setSelectedLocalDraft(draft);
     setEditTo(recipientEmailForDraft(draft));
-    setEditSubject(draft.prompt || "Draft reply");
-    setEditBody(draft.draft_text);
+    setEditSubject(subjectFromDraft(draft));
+    setEditBody(bodyFromDraft(draft));
   }, []);
 
   async function handleSendGmailDraft() {
@@ -403,10 +459,18 @@ export function DraftReviewer() {
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-3">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">To</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Recipient name
+              </span>
+              <Input value={recipientNameForDraft(selectedLocalDraft)} readOnly />
+            </div>
+            <div className="grid gap-3">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Recipient email
+              </span>
               <Input
-                value={editTo}
-                onChange={(event) => setEditTo(event.target.value)}
+                value={stripPlaceholderTokens(editTo)}
+                onChange={(event) => setEditTo(stripPlaceholderTokens(event.target.value))}
                 placeholder="No recipient detected"
               />
               {!editTo.trim() ? (
@@ -417,14 +481,17 @@ export function DraftReviewer() {
             </div>
             <div className="grid gap-3">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Subject</span>
-              <Input value={editSubject} onChange={(event) => setEditSubject(event.target.value)} />
+              <Input
+                value={stripPlaceholderTokens(editSubject)}
+                onChange={(event) => setEditSubject(stripPlaceholderTokens(event.target.value))}
+              />
             </div>
             <div className="grid gap-3">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Message Body</span>
               <Textarea
-                className="min-h-[280px] resize-y text-sm leading-relaxed"
-                value={editBody}
-                onChange={(event) => setEditBody(event.target.value)}
+                className="min-h-[280px] resize-y font-serif text-sm leading-8 text-foreground"
+                value={stripPlaceholderTokens(editBody)}
+                onChange={(event) => setEditBody(stripPlaceholderTokens(event.target.value))}
               />
             </div>
             {!user?.google_connected ? (

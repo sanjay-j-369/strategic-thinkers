@@ -22,12 +22,25 @@ router = APIRouter(prefix="/api/ops", tags=["ops"])
 
 FROM_EMAIL_PATTERN = re.compile(r"From:\s*([^<\n]+?)\s*<([^>\s]+@[^>\s]+)>", re.IGNORECASE)
 EMAIL_PATTERN = re.compile(r"\b([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})\b", re.IGNORECASE)
+PLACEHOLDER_PATTERN = re.compile(
+    r"<(?:PERSON(?:_[a-f0-9]+)?|NAME|USER|EMAIL|PHONE|RECIPIENT|SENDER|STAKEHOLDER|CONTACT)>",
+    re.IGNORECASE,
+)
 
 
 class SendDraftBody(BaseModel):
     to_email: str
     subject: str
     body: str
+
+
+def strip_placeholder_tokens(value: str | None) -> str:
+    if not value:
+        return ""
+    cleaned = PLACEHOLDER_PATTERN.sub("", value)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
+    return cleaned.strip()
 
 
 @router.get("/notifications")
@@ -246,9 +259,10 @@ async def send_local_draft(
         await handle_refresh_token(request, user, creds)
 
         message = EmailMessage()
-        message.set_content(body.body)
-        message["To"] = body.to_email.strip()
-        message["Subject"] = body.subject.strip() or row.prompt
+        clean_body = strip_placeholder_tokens(body.body)
+        message.set_content(clean_body)
+        message["To"] = strip_placeholder_tokens(body.to_email).strip()
+        message["Subject"] = strip_placeholder_tokens(body.subject).strip() or row.prompt
 
         try:
             send_response = service.users().messages().send(
@@ -261,9 +275,9 @@ async def send_local_draft(
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
         payload = dict(row.context_payload or {})
-        payload["to_email"] = body.to_email.strip()
-        row.prompt = body.subject.strip() or row.prompt
-        row.draft_text = body.body
+        payload["to_email"] = strip_placeholder_tokens(body.to_email).strip()
+        row.prompt = strip_placeholder_tokens(body.subject).strip() or row.prompt
+        row.draft_text = clean_body
         row.context_payload = payload
         row.status = "SENT"
         row.approved_at = datetime.now(timezone.utc)
@@ -300,6 +314,29 @@ async def discard_local_draft(
         await session.commit()
 
     return {"status": "discarded", "id": draft_id}
+
+
+@router.delete("/notifications/{notification_id}")
+async def delete_notification(
+    notification_id: str,
+    request: Request,
+):
+    user = await require_current_user(request)
+    async_session = request.app.state.async_session
+    async with async_session() as session:
+        result = await session.execute(
+            select(AgentNotification).where(
+                AgentNotification.id == notification_id,
+                AgentNotification.user_id == user.id,
+            )
+        )
+        item = result.scalar_one_or_none()
+        if not item:
+            raise HTTPException(status_code=404, detail="Notification not found")
+        await session.delete(item)
+        await session.commit()
+
+    return {"status": "deleted", "id": notification_id}
 
 
 @router.get("/runs")

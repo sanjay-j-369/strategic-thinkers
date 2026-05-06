@@ -1,4 +1,9 @@
-import { ArrowUpRight, CalendarDays, Clock3, Link2, Users } from "lucide-react";
+"use client";
+
+import { ArrowUpRight, CalendarDays, Clock3, Link2, Users, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { useAuth } from "@/components/providers/auth-provider";
+import { apiFetch } from "@/lib/api";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,10 +20,19 @@ interface PrepCardData {
   generated_at: string;
 }
 
-export function PrepCard({ data }: { data: PrepCardData }) {
+interface PrepCardProps {
+  data: PrepCardData;
+  notificationId?: string;
+  onDelete?: () => void;
+}
+
+export function PrepCard(props: PrepCardProps) {
+  const { data, notificationId, onDelete } = props;
   const lines = data.summary?.split("\n").filter(Boolean) || [];
   const unresolved = data.unresolved_loops || [];
   const promises = data.promises || [];
+  const { token } = useAuth();
+  const [isDeleting, setIsDeleting] = useState(false);
 
   return (
     <Card className="overflow-hidden transition-transform duration-200 hover:-translate-y-0.5">
@@ -32,15 +46,41 @@ export function PrepCard({ data }: { data: PrepCardData }) {
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-sky-50 dark:bg-sky-900/20">
                 <CalendarDays className="h-5 w-5 text-foreground" />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 flex-1">
                 <CardTitle className="text-lg">{data.topic}</CardTitle>
                 <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                   <Clock3 className="h-4 w-4" />
                   {new Date(data.generated_at).toLocaleString()}
                 </div>
               </div>
+
+              {notificationId ? (
+                <div className="flex items-center">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!notificationId) return;
+                      void (async () => {
+                        try {
+                          setIsDeleting(true);
+                          await apiFetch(`/api/ops/notifications/${notificationId}`, { method: "DELETE", token });
+                          if (onDelete) onDelete();
+                        } catch (err) {
+                          console.error(err);
+                        } finally {
+                          setIsDeleting(false);
+                        }
+                      })();
+                    }}
+                    className="inline-flex items-center gap-2 rounded px-3 py-2 text-xs font-black uppercase tracking-[0.18em] border border-border bg-card hover:bg-accent"
+                    aria-label="Delete meeting prep"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {isDeleting ? "Deleting" : "Delete"}
+                  </button>
+                </div>
+              ) : null}
             </div>
-          </div>
 
           {data.entities && data.entities.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2 md:max-w-[40%] md:justify-end">
@@ -56,6 +96,7 @@ export function PrepCard({ data }: { data: PrepCardData }) {
             </div>
           ) : null}
         </div>
+      </div>
       </CardHeader>
 
       <CardContent className="space-y-5 pt-6">

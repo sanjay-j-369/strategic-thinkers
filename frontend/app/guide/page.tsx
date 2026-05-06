@@ -23,6 +23,23 @@ const STARTERS = [
   "What is the highest-leverage founder bottleneck visible in the last week?",
 ];
 
+const MENTOR_BOARD_PROMPT = `You are a board-level mentor writing for a startup board meeting.
+
+Format every answer in markdown with this exact structure:
+# Top Strategic Risks
+1. **Short title**
+  - Sentence one: the risk, stated plainly.
+  - Sentence two: why it matters to the business.
+  - Sentence three: the operational consequence if it is not addressed.
+
+# Recommended Actions
+1. **Short action title**
+  - Concrete step one.
+  - Concrete step two.
+  - Concrete step three.
+
+Keep the tone concise, professional, and executive-level. Avoid long paragraphs. Do not use placeholder tokens such as <PERSON_xxx>; replace them with generic roles like an investor, a team member, or a customer.`;
+
 export default function GuidePage() {
   const { ready, token, user } = useRequireAuth();
   const [question, setQuestion] = useState("");
@@ -175,6 +192,10 @@ export default function GuidePage() {
                   title="Board Member"
                   subtitle="Ask anything about your startup strategy"
                   placeholder="What's our biggest growth opportunity right now?"
+                  systemPrompt={MENTOR_BOARD_PROMPT}
+                  runLogPillar="MENTOR"
+                  runLogAgentName="Board Member"
+                  runLogTriggerType="chat"
                   storageKey={`mentor-chat:${user?.id || "workspace"}`}
                   quickPrompts={["Give me the latest update", "Generate a board-ready report"]}
                 />

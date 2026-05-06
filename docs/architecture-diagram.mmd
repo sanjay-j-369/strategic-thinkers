@@ -1,0 +1,77 @@
+graph TB
+    subgraph Frontend["🎨 Frontend Layer"]
+        NextJS["Next.js 14<br/>Tailwind CSS<br/>Shadcn/UI<br/>WebSocket Client"]
+        Clerk["Clerk Auth<br/>OAuth2"]
+    end
+
+    subgraph Ingestion["📥 Ingestion Layer"]
+        Gmail["Gmail<br/>Polling"]
+        Slack["Slack<br/>Webhooks"]
+        Calendar["Google Calendar<br/>Sync"]
+    end
+
+    subgraph Orchestration["🎯 Orchestration & Message Bus"]
+        Redis["Redis 7<br/>Priority Queue<br/>Pub/Sub"]
+        Celery["Celery 5<br/>Task Queue<br/>Beat Scheduler"]
+    end
+
+    subgraph Processing["🧠 Processing & LLM Layer"]
+        Workers["Celery Workers"]
+        Presidio["Presidio<br/>PII Detection"]
+        Encryption["Cryptography<br/>Fernet Encryption"]
+        LangGraph["LangGraph<br/>Reasoning Graphs"]
+        GPT4["GPT-4o<br/>Model API"]
+        Embeddings["OpenAI<br/>Embeddings<br/>text-embedding-3-small"]
+    end
+
+    subgraph Memory["💾 Memory & Persistence Layer"]
+        Pinecone["Pinecone<br/>Vector DB<br/>Semantic Search"]
+        Postgres["PostgreSQL 16<br/>SQLAlchemy ORM<br/>Archive & Summary<br/>User Data"]
+    end
+
+    subgraph API["⚙️ API Server"]
+        FastAPI["FastAPI<br/>REST + WebSocket<br/>Async/Await"]
+    end
+
+    Ingestion -->|Data Event| Redis
+    Redis -->|Task Dispatch| Celery
+    Celery -->|Worker Lease| Workers
+
+    Workers -->|Strip PII| Presidio
+    Presidio -->|Encrypt| Encryption
+    Encryption -->|Embed| Embeddings
+
+    Workers -->|Query Memory| Pinecone
+    Workers -->|Query Context| Postgres
+
+    Workers -->|Reasoning| LangGraph
+    LangGraph -->|API Call| GPT4
+    GPT4 -->|Response| Workers
+
+    Workers -->|Save Result| Postgres
+    Workers -->|Upsert Vector| Pinecone
+    Workers -->|Publish Event| Redis
+
+    Redis -->|WebSocket Update| FastAPI
+    FastAPI -->|Render Feed| NextJS
+
+    NextJS -->|Request| FastAPI
+    FastAPI -->|Query| Postgres
+    FastAPI -->|Search| Pinecone
+
+    NextJS -->|Login| Clerk
+    Clerk -->|Validate| FastAPI
+
+    classDef frontend fill:#e1f5ff,stroke:#01579b,stroke-width:2px,color:#111111
+    classDef ingestion fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#111111
+    classDef orchestration fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#111111
+    classDef processing fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#111111
+    classDef memory fill:#fce4ec,stroke:#880e4f,stroke-width:2px,color:#111111
+    classDef api fill:#f1f8e9,stroke:#33691e,stroke-width:2px,color:#111111
+
+    class NextJS,Clerk,Frontend frontend
+    class Gmail,Slack,Calendar,Ingestion ingestion
+    class Redis,Celery,Orchestration orchestration
+    class Workers,Presidio,Encryption,LangGraph,GPT4,Embeddings,Processing processing
+    class Pinecone,Postgres,Memory memory
+    class FastAPI,API api

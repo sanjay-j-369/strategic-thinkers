@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowUpRight,
   CalendarDays,
   Clock3,
   Plus,
+  Trash2,
   Users,
 } from "lucide-react";
 
@@ -41,7 +42,14 @@ interface Meeting {
   attendees: string[];
   scheduled_at: string;
   summary?: string;
-  status: "upcoming" | "prepped" | "done";
+  status: "upcoming" | "prepped" | "past";
+}
+
+type ToastKind = "success" | "error";
+
+interface ToastState {
+  kind: ToastKind;
+  message: string;
 }
 
 export default function MeetingsPage() {
@@ -49,12 +57,16 @@ export default function MeetingsPage() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Meeting | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [topic, setTopic] = useState("");
   const [attendees, setAttendees] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
 
   const upcomingCount = useMemo(
     () =>
@@ -66,6 +78,24 @@ export default function MeetingsPage() {
     () => meetings.filter((meeting) => meeting.status === "prepped").length,
     [meetings]
   );
+  const pastCount = useMemo(
+    () => meetings.filter((meeting) => meeting.status === "past").length,
+    [meetings]
+  );
+
+  const sections = useMemo(() => ({
+    upcoming: meetings.filter((meeting) => meeting.status === "upcoming"),
+    prepped: meetings.filter((meeting) => meeting.status === "prepped"),
+    past: meetings.filter((meeting) => meeting.status === "past"),
+  }), [meetings]);
+
+  const pushToast = useCallback((message: string, kind: ToastKind) => {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+    setToast({ kind, message });
+    toastTimerRef.current = window.setTimeout(() => setToast(null), 5000);
+  }, []);
 
   const fetchMeetings = useCallback(async () => {
     if (!token) return;
@@ -119,6 +149,28 @@ export default function MeetingsPage() {
     }
   }
 
+  async function deleteMeeting(meeting: Meeting) {
+    if (!token) return;
+    const snapshot = meetings;
+    setDeleteLoading(true);
+    setDeleteTarget(null);
+    setMeetings((current) => current.filter((item) => item.id !== meeting.id));
+
+    try {
+      await apiFetch(`/api/meetings/${meeting.id}`, {
+        method: "DELETE",
+        token,
+      });
+      pushToast("Meeting deleted.", "success");
+    } catch (err) {
+      setMeetings(snapshot);
+      pushToast(err instanceof Error ? err.message : "Failed to delete meeting", "error");
+      await fetchMeetings();
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
+
   if (!ready) {
     return (
       <div className="space-y-4">
@@ -163,6 +215,7 @@ export default function MeetingsPage() {
             {[
               { label: "Upcoming", value: upcomingCount, icon: CalendarDays },
               { label: "Prepped", value: preppedCount, icon: Clock3 },
+              { label: "Past", value: pastCount, icon: CalendarDays },
             ].map(({ label, value, icon: Icon }) => (
               <Card key={label}>
                 <CardContent className="flex items-center justify-between gap-4 pt-6">
@@ -215,20 +268,104 @@ export default function MeetingsPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-4">
-            {meetings.map((meeting, index) => (
-              <motion.div
-                key={meeting.id}
-                initial={{ opacity: 0, y: 14 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, delay: index * 0.03 }}
-              >
-                <MeetingCard meeting={meeting} />
-              </motion.div>
-            ))}
+          <div className="space-y-8">
+            {(["upcoming", "prepped", "past"] as const).map((status) => {
+              const items = sections[status];
+              if (items.length === 0) return null;
+
+              const title = status === "upcoming" ? "Upcoming" : status === "prepped" ? "Prepped" : "Past";
+
+              return (
+                <section key={status} className="space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-2xl font-semibold text-foreground">{title}</h2>
+                      <p className="text-sm text-muted-foreground">
+                        {items.length} meeting{items.length === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {items.map((meeting, index) => (
+                      <motion.div
+                        key={meeting.id}
+                        initial={{ opacity: 0, y: 14 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.25, delay: index * 0.03 }}
+                      >
+                        <MeetingCard
+                          meeting={meeting}
+                          onDelete={() => setDeleteTarget(meeting)}
+                        />
+                      </motion.div>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
           </div>
         )}
       </div>
+
+      {toast ? (
+        <div
+          className={`fixed right-6 top-6 z-[70] max-w-sm rounded-2xl border px-4 py-3 shadow-soft-lg ${
+            toast.kind === "success"
+              ? "border-emerald-500/30 bg-emerald-50 text-emerald-900"
+              : "border-red-500/30 bg-red-50 text-red-900"
+          }`}
+        >
+          <p className="text-sm font-medium">{toast.message}</p>
+        </div>
+      ) : null}
+
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete meeting</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this meeting?
+              {deleteTarget?.status === "prepped"
+                ? " This meeting already has prep and cannot be deleted until the prep card is removed."
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-xl border border-border bg-card p-4">
+            <p className="text-sm font-semibold text-foreground">{deleteTarget?.topic}</p>
+            {deleteTarget ? (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {new Date(deleteTarget.scheduled_at).toLocaleString()}
+              </p>
+            ) : null}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleteLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => deleteTarget && void deleteMeeting(deleteTarget)}
+              disabled={deleteLoading || deleteTarget?.status === "prepped"}
+            >
+              {deleteLoading ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <DialogContent>
         <form onSubmit={scheduleMeeting} className="space-y-5">
@@ -287,11 +424,12 @@ export default function MeetingsPage() {
   );
 }
 
-function MeetingCard({ meeting }: { meeting: Meeting }) {
+function MeetingCard({ meeting, onDelete }: { meeting: Meeting; onDelete: () => void }) {
   const date = new Date(meeting.scheduled_at);
-  const isUpcoming = date > new Date();
+  const isUpcoming = meeting.status === "upcoming" || date > new Date();
   const meetLink = meeting.summary?.match(/Meet Link: (https?:\/\/[^\s]+)/)?.[1];
   const summaryText = meeting.summary?.replace(/Meet Link:.*/, "").trim();
+  const statusLabel = meeting.status === "prepped" ? "Prepped" : isUpcoming ? "Upcoming" : "Past";
 
   return (
     <Card className="transition-transform duration-200 hover:-translate-y-0.5">
@@ -300,7 +438,7 @@ function MeetingCard({ meeting }: { meeting: Meeting }) {
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-3">
               <Badge variant={isUpcoming ? "default" : "secondary"}>
-                {isUpcoming ? "Upcoming" : "Past"}
+                {statusLabel}
               </Badge>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Clock3 className="h-4 w-4" />
@@ -326,14 +464,25 @@ function MeetingCard({ meeting }: { meeting: Meeting }) {
             ) : null}
           </div>
 
-          {meetLink ? (
-            <Button asChild variant="secondary" className="shrink-0">
-              <a href={meetLink} target="_blank" rel="noopener noreferrer">
-                Join Meeting
-                <ArrowUpRight className="h-4 w-4" />
-              </a>
+          <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
+            {meetLink ? (
+              <Button asChild variant="secondary">
+                <a href={meetLink} target="_blank" rel="noopener noreferrer">
+                  Join Meeting
+                  <ArrowUpRight className="h-4 w-4" />
+                </a>
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onDelete}
+              className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
             </Button>
-          ) : null}
+          </div>
         </div>
       </CardContent>
     </Card>

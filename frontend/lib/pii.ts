@@ -4,6 +4,7 @@ import { apiFetch } from "@/lib/api";
 import { decryptPIIMapping } from "@/lib/crypto";
 
 const PII_TOKEN_PATTERN = /<[A-Z_]+_[a-f0-9]+>/g;
+const PLACEHOLDER_PATTERN = /<(?:PERSON(?:_[a-f0-9]+)?|NAME|USER|EMAIL|PHONE|RECIPIENT|SENDER|STAKEHOLDER|CONTACT)>/g;
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const PHONE_PATTERN = /(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}\b/g;
 const SHORT_PHONE_PATTERN = /\b\d{3}[\s.-]\d{4}\b/g;
@@ -48,6 +49,15 @@ export function replacePIITokens(
   return resolved;
 }
 
+export function stripPlaceholderTokens(value: string | null | undefined): string {
+  if (!value) return value || "";
+  return value
+    .replace(PLACEHOLDER_PATTERN, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .trim();
+}
+
 function randomToken(entityType: string): string {
   const bytes = new Uint8Array(5);
   window.crypto.getRandomValues(bytes);
@@ -55,8 +65,24 @@ function randomToken(entityType: string): string {
   return `<${entityType}_${suffix}>`;
 }
 
+function findAllMatches(value: string, pattern: RegExp): RegExpExecArray[] {
+  const matches: RegExpExecArray[] = [];
+  const regex = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`);
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(value)) !== null) {
+    matches.push(match);
+    // Prevent infinite loops for zero-length matches.
+    if (match[0].length === 0) {
+      regex.lastIndex += 1;
+    }
+  }
+
+  return matches;
+}
+
 function overlapsExistingToken(value: string, start: number, end: number): boolean {
-  for (const match of value.matchAll(PII_TOKEN_PATTERN)) {
+  for (const match of findAllMatches(value, PII_TOKEN_PATTERN)) {
     const tokenStart = match.index || 0;
     const tokenEnd = tokenStart + match[0].length;
     if (tokenStart < end && start < tokenEnd) return true;
@@ -67,7 +93,7 @@ function overlapsExistingToken(value: string, start: number, end: number): boole
 function collectMatches(value: string): Array<{ start: number; end: number; type: string }> {
   const spans: Array<{ start: number; end: number; type: string }> = [];
   const addMatches = (pattern: RegExp, type: string) => {
-    for (const match of value.matchAll(pattern)) {
+    for (const match of findAllMatches(value, pattern)) {
       const start = match.index || 0;
       const end = start + match[0].length;
       if (!overlapsExistingToken(value, start, end)) {
@@ -80,7 +106,7 @@ function collectMatches(value: string): Array<{ start: number; end: number; type
   addMatches(PHONE_PATTERN, "PHONE");
   addMatches(SHORT_PHONE_PATTERN, "PHONE");
 
-  for (const match of value.matchAll(PERSON_PATTERN)) {
+  for (const match of findAllMatches(value, PERSON_PATTERN)) {
     const start = match.index || 0;
     const end = start + match[0].length;
     const firstWord = match[0].split(/\s+/)[0];

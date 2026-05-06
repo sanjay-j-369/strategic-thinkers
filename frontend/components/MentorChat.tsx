@@ -30,6 +30,9 @@ interface MentorChatProps {
   quickPrompts?: string[];
   workerKey?: string;
   contextTags?: string[];
+  runLogPillar?: string;
+  runLogAgentName?: string;
+  runLogTriggerType?: string;
 }
 
 export function MentorChat({
@@ -43,6 +46,9 @@ export function MentorChat({
   quickPrompts = [],
   workerKey,
   contextTags = [],
+  runLogPillar,
+  runLogAgentName,
+  runLogTriggerType,
 }: MentorChatProps) {
   const { privateKey } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -286,6 +292,9 @@ export function MentorChat({
           systemPrompt?: string;
           workerKey?: string;
           contextTags?: string[];
+          runLogPillar?: string;
+          runLogAgentName?: string;
+          runLogTriggerType?: string;
         } = {
           message: tokenizedInput.redacted,
           history,
@@ -298,6 +307,11 @@ export function MentorChat({
         }
         if (contextTags.length > 0) {
           body.contextTags = contextTags;
+        }
+        if (runLogPillar && runLogAgentName) {
+          body.runLogPillar = runLogPillar;
+          body.runLogAgentName = runLogAgentName;
+          body.runLogTriggerType = runLogTriggerType || "chat";
         }
 
         const data = await apiFetch<{ reply: string }>("/api/chat", {
@@ -329,7 +343,19 @@ export function MentorChat({
         setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
       }
     },
-    [contextTags, input, loading, messages, privateKey, systemPrompt, token, workerKey]
+    [
+      contextTags,
+      input,
+      loading,
+      messages,
+      privateKey,
+      runLogAgentName,
+      runLogPillar,
+      runLogTriggerType,
+      systemPrompt,
+      token,
+      workerKey,
+    ]
   );
 
   return (

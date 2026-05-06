@@ -1,5 +1,6 @@
 import json
 import base64
+import re
 from email.message import EmailMessage
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
@@ -14,6 +15,11 @@ from app.models.user import User
 from app.pipeline.encryption import decrypt, encrypt
 
 router = APIRouter(prefix="/api/gmail", tags=["gmail"])
+
+PLACEHOLDER_PATTERN = re.compile(
+    r"<(?:PERSON(?:_[a-f0-9]+)?|NAME|USER|EMAIL|PHONE|RECIPIENT|SENDER|STAKEHOLDER|CONTACT)>",
+    re.IGNORECASE,
+)
 
 class CreateDraftRequest(BaseModel):
     to_email: str
@@ -65,6 +71,15 @@ def encode_message(message: EmailMessage) -> str:
     encoded = base64.urlsafe_b64encode(message.as_bytes()).decode().rstrip("=")
     return encoded
 
+
+def strip_placeholder_tokens(value: str | None) -> str:
+    if not value:
+        return ""
+    cleaned = PLACEHOLDER_PATTERN.sub("", value)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
+    return cleaned.strip()
+
 @router.post("/drafts/create")
 async def create_draft(req: CreateDraftRequest, request: Request):
     user = await require_current_user(request)
@@ -73,9 +88,9 @@ async def create_draft(req: CreateDraftRequest, request: Request):
     
     try:
         message = EmailMessage()
-        message.set_content(req.body_html, subtype='html')
-        message['To'] = req.to_email
-        message['Subject'] = req.subject
+        message.set_content(strip_placeholder_tokens(req.body_html), subtype='html')
+        message['To'] = strip_placeholder_tokens(req.to_email)
+        message['Subject'] = strip_placeholder_tokens(req.subject)
 
         create_message = {'message': {'raw': encode_message(message)}}
         draft = service.users().drafts().create(userId="me", body=create_message).execute()
@@ -144,7 +159,7 @@ async def send_draft(draft_id: str, req: SendDraftRequest, request: Request):
         headers_dict = {h["name"]: h["value"] for h in headers}
 
         message = EmailMessage()
-        message.set_content(req.updated_body_html, subtype='html')
+        message.set_content(strip_placeholder_tokens(req.updated_body_html), subtype='html')
         if headers_dict.get("To"):
             message['To'] = headers_dict["To"]
         if headers_dict.get("Subject"):
